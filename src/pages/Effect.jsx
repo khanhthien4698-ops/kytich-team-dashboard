@@ -4,6 +4,7 @@ import { vnToday, addDays, ddmm } from '../lib/date.js'
 import { useToast } from '../App.jsx'
 import { KIND } from './Today.jsx'
 import Review, { interactions, isBad } from '../components/Review.jsx'
+import { Mascot } from '../components/ui.jsx'
 
 // Gom số liệu cho một nhóm bài (theo người hoặc theo group)
 function summarize(posts, reviewOf) {
@@ -71,7 +72,17 @@ export default function Effect() {
       {[7, 30].map((n) => <button key={n} className={days === n ? 'on' : ''} onClick={() => setDays(n)}>{n} ngày</button>)}
     </div>
   )
-  if (!data) return <><h1>Hiệu quả seeding</h1>{switcher}<p className="empty">Đang tải…</p></>
+  const head = (
+    <div className="page-h">
+      <Mascot who="tichtich" pose="trophy" className="" />
+      <div style={{ marginRight: 'auto' }}>
+        <h1>Hiệu quả seeding</h1>
+        <div className="sub">{ddmm(from)} – {ddmm(to)} · theo kết quả bot chấm mỗi sáng</div>
+      </div>
+      {switcher}
+    </div>
+  )
+  if (!data) return <>{head}<p className="empty">Đang tải…</p></>
 
   const { members, posts, reviewOf, targets } = data
   const nameOf = Object.fromEntries(members.map((m) => [m.id, m.name]))
@@ -86,21 +97,14 @@ export default function Effect() {
 
   return (
     <>
-      <div className="row" style={{ flexWrap: 'wrap' }}>
-        <div style={{ marginRight: 'auto' }}>
-          <h1>Hiệu quả seeding</h1>
-          <div className="sub">{ddmm(from)} – {ddmm(to)} · theo kết quả bot chấm mỗi sáng</div>
-        </div>
-        {switcher}
+      {head}
+      <div className="kpis">
+        <div className="kpi"><div className="lbl">Bài · Comment</div><div className="v">{all.nPost}<small> · {all.nCmt}</small></div></div>
+        <div className="kpi"><div className="lbl">Đã chấm</div><div className="v">{all.checked}<small>/{all.posts}</small></div></div>
+        <div className="kpi"><div className="lbl">Tổng tương tác</div><div className="v">{all.inter}</div></div>
+        <div className="kpi"><div className="lbl">Điểm TB</div><div className="v">{all.avg ? '★' + all.avg.toFixed(1) : '—'}</div></div>
+        <div className="kpi"><div className="lbl">Bị gỡ/ẩn · vi phạm</div><div className="v" style={{ color: all.removed + all.flagged ? 'var(--red)' : undefined }}>{all.removed}<small> · {all.flagged}</small></div></div>
       </div>
-
-      <section className="card">
-        <div className="stats">
-          <div><div className="sub">Bài / đã chấm</div><h1>{all.posts} / {all.checked}</h1></div>
-          <div><div className="sub">Tổng tương tác</div><h1>{all.inter}</h1></div>
-          <div><div className="sub">Điểm TB · bị gỡ · vi phạm</div><h1>{all.avg ? '★' + all.avg.toFixed(1) : '—'} · {all.removed} · {all.flagged}</h1></div>
-        </div>
-      </section>
 
       <Table title="Theo người" rows={byPerson} />
       <Table title="Theo group" rows={byGroup} />
@@ -113,7 +117,7 @@ export default function Effect() {
         {top.map((p, i) => (
           <div key={p.id} className="top-post">
             <div><b>{i + 1}. {nameOf[p.member_id]}</b> <span className="sub">· {ddmm(p.date)} · {p.group_name} · {KIND[p.kind]} · {interactions(reviewOf[p.id])} tương tác</span></div>
-            <a href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
+            <a className="link" href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
             <Review r={reviewOf[p.id]} kind={p.kind} />
           </div>
         ))}

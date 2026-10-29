@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as api from '../lib/api.js'
 import { useToast } from '../App.jsx'
+import { Mascot } from '../components/ui.jsx'
 
 const ROLE = { staff: 'Nhân viên', admin: 'Admin', bot: 'Bot' }
 
@@ -26,13 +27,15 @@ export default function Settings({ me }) {
 
   return (
     <>
-      <h1>Cài đặt</h1>
-      <div className="sub">Chỉ Thiện thấy trang này.</div>
+      <div className="page-h">
+        <Mascot who="tichtich" pose="checklist" className="" />
+        <div><h1>Cài đặt</h1><div className="sub">Thành viên & chỉ tiêu, việc cố định từng người, danh sách group. Chỉ Thiện thấy trang này.</div></div>
+      </div>
 
       <section className="card">
-        <div className="card-h"><h2>Thành viên</h2></div>
+        <div className="card-h"><h2>👥 Thành viên & chỉ tiêu</h2></div>
         <p className="mini" style={{ marginTop: 0 }}>
-          Email đăng nhập phải trùng với tài khoản tạo trong Supabase (Authentication → Users). Tên đăng nhập “thanhvien1” = email thanhvien1@{api.LOGIN_DOMAIN}. Không xoá người, chỉ tắt.
+          Email đăng nhập phải trùng với tài khoản tạo trong Supabase (Authentication → Users). Tên đăng nhập “dag” = email dag@{api.LOGIN_DOMAIN}. Chỉ tiêu: số bài đăng và số comment mỗi ngày. Không xoá người, chỉ tắt.
         </p>
         {members.map((m) => <MemberRow key={m.id} m={m} isSelf={m.id === me.id} onSave={(row) => save(api.saveMember, row)} />)}
         <MemberRow m={{ name: '', login_email: '', role: 'staff', seeding_quota: 2, comment_quota: 5, active: true, sort_order: members.length }} isNew onSave={(row) => save(api.saveMember, row, 'Đã thêm thành viên')} />
@@ -40,7 +43,7 @@ export default function Settings({ me }) {
 
       <section className="card">
         <div className="card-h">
-          <h2>Việc cố định</h2>
+          <h2>☑️ Việc cố định</h2>
           <select className="input" style={{ width: 'auto', marginLeft: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>
             {members.filter((m) => m.role !== 'bot').map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
@@ -50,7 +53,7 @@ export default function Settings({ me }) {
       </section>
 
       <section className="card">
-        <div className="card-h"><h2>Group Facebook</h2><span className="count">{groups.filter((g) => g.active).length} đang dùng</span></div>
+        <div className="card-h"><h2>📣 Group Facebook</h2><span className="count">{groups.filter((g) => g.active).length} đang dùng</span></div>
         {groups.map((g) => <GroupRow key={g.id} g={g} onSave={(row) => save(api.saveGroup, row)} />)}
         <GroupRow g={{ name: '', url: '', active: true, sort_order: groups.length }} isNew onSave={(row) => save(api.saveGroup, row, 'Đã thêm group')} />
       </section>
@@ -131,7 +134,7 @@ function GroupRow({ g, isNew, onSave }) {
   return (
     <form className={'set-row g' + (d.active ? '' : ' off')} onSubmit={submit}>
       <input className="input" placeholder={isNew ? '+ Tên group mới' : 'Tên group'} value={d.name} onChange={set('name')} />
-      <input className="input" placeholder="Link group (tuỳ chọn)" value={d.url || ''} onChange={set('url')} />
+      <input className="input" placeholder="Link group (để tự nhận ra group khi dán link)" value={d.url || ''} onChange={set('url')} />
       <div className="row">
         {!isNew && <label className="toggle"><input type="checkbox" checked={d.active} onChange={set('active')} /> Dùng</label>}
         <button className="btn sm" disabled={!dirty || !d.name.trim()}>{isNew ? 'Thêm' : 'Lưu'}</button>

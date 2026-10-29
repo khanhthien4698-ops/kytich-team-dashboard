@@ -1,0 +1,142 @@
+#!/usr/bin/env node
+// Script cho lịch tự động (bot 8h sáng) đọc/ghi dashboard.
+// Đăng nhập bằng tài khoản role 'bot'. Mật khẩu lấy từ macOS Keychain, KHÔNG nằm trong file/repo/log.
+//
+//   node scripts/bot.mjs check                  # thử đăng nhập, in tên + role
+//   node scripts/bot.mjs yesterday [YYYY-MM-DD] # in JSON dữ liệu hôm qua của từng người + TB 7 ngày + chủ đề 3 ngày gần
+//   node scripts/bot.mjs report --text "..." [--member "Thành viên 1"] [--date YYYY-MM-DD]
+//   node scripts/bot.mjs report --file report.json   # [{ "member": null|"Tên", "text": "..." }, ...]
+//   node scripts/bot.mjs ideas --file ideas.json     # [{ "topic","question","angle","gift_doc","assigned_to":"Tên" }, ...]
+//
+// Cấu hình: đọc VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_LOGIN_DOMAIN từ .env.local (hoặc biến môi trường).
+// BOT_EMAIL mặc định bot@<domain>. Keychain service: kytich-dashboard-bot (account = BOT_EMAIL).
+import { createClient } from '@supabase/supabase-js'
+import { execFileSync } from 'node:child_process'
+import { readFileSync, existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const KEYCHAIN_SERVICE = 'kytich-dashboard-bot'
+
+function loadEnv() {
+  const env = { ...process.env }
+  for (const f of ['.env', '.env.local']) {
+    const p = join(ROOT, f)
+    if (!existsSync(p)) continue
+    for (const line of readFileSync(p, 'utf8').split('\n')) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/)
+      if (m && !(m[1] in process.env)) env[m[1]] = m[2].replace(/^["']|["']$/g, '')
+    }
+  }
+  return env
+}
+
+function die(msg) { console.error('LỖI: ' + msg); process.exit(1) }
+
+const env = loadEnv()
+const URL = env.VITE_SUPABASE_URL
+const KEY = env.VITE_SUPABASE_ANON_KEY
+const DOMAIN = env.VITE_LOGIN_DOMAIN || 'aptiskytich.vn'
+const BOT_EMAIL = (env.BOT_EMAIL || `bot@${DOMAIN}`).toLowerCase()
+
+function keychainPassword() {
+  try {
+    return execFileSync('security', ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', BOT_EMAIL, '-w'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    die(`Không thấy mật khẩu bot trong Keychain (service "${KEYCHAIN_SERVICE}", account "${BOT_EMAIL}"). Xem README mục "Lưu mật khẩu bot".`)
+  }
+}
+
+const vnToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+
+function args(argv) {
+  const o = { _: [] }
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith('--')) o[argv[i].slice(2)] = argv[i + 1]?.startsWith('--') || argv[i + 1] === undefined ? true : argv[++i]
+    else o._.push(argv[i])
+  }
+  return o
+}
+
+async function main() {
+  const a = args(process.argv.slice(2))
+  const cmd = a._[0]
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 12).join('\n')); return }
+
+  if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
+  const sb = createClient(URL, KEY, { auth: { persistSession: false } })
+  const { error: authErr } = await sb.auth.signInWithPassword({ email: BOT_EMAIL, password: keychainPassword() })
+  if (authErr) die('Đăng nhập bot thất bại: ' + authErr.message)
+
+  const q = async (p) => { const { data, error } = await p; if (error) die(error.message); return data }
+  const members = await q(sb.from('members').select('*').order('sort_order'))
+  const me = members.find((m) => m.login_email === BOT_EMAIL)
+  if (!me || me.role !== 'bot' || !me.active) die(`${BOT_EMAIL} chưa có trong bảng members với role 'bot'.`)
+  const byName = (name) => {
+    if (!name) return null
+    const m = members.find((x) => x.name.toLowerCase() === String(name).toLowerCase() || x.id === name)
+    if (!m) die(`Không tìm thấy thành viên "${name}"`)
+    return m.id
+  }
+
+  if (cmd === 'check') {
+    console.log(`OK: đăng nhập ${me.name} (${me.role}). Thấy ${members.length} thành viên.`)
+  } else if (cmd === 'yesterday') {
+    const day = a._[1] || addDays(vnToday(), -1)
+    const from7 = addDays(day, -6)
+    const range = (t, f) => q(sb.from(t).select('*').gte('date', f).lte('date', day))
+    const [routines, checks, extras, posts, notes, ideas] = await Promise.all([
+      q(sb.from('routines').select('*').eq('active', true)),
+      range('daily_checks', day), range('extra_tasks', day), range('seeding_posts', from7), range('day_notes', day),
+      q(sb.from('seed_ideas').select('date,topic').gte('date', addDays(day, -2)).lte('date', addDays(day, 1))),
+    ])
+    const staff = members.filter((m) => m.active && m.role === 'staff')
+    const people = staff.map((m) => {
+      const rs = routines.filter((r) => r.member_id === m.id)
+      const done = rs.filter((r) => checks.some((c) => c.routine_id === r.id && c.member_id === m.id && c.date === day && c.done))
+      const ex = extras.filter((e) => e.member_id === m.id && e.date === day)
+      const p = posts.filter((x) => x.member_id === m.id)
+      const today = p.filter((x) => x.date === day)
+      return {
+        name: m.name,
+        routines: { done: done.length + ex.filter((e) => e.done).length, total: rs.length + ex.length, missing: rs.filter((r) => !done.includes(r)).map((r) => r.title) },
+        seeding: { count: today.length, quota: m.seeding_quota, links: today.map((x) => ({ url: x.url, group: x.group_name, kind: x.kind })) },
+        seeding_avg_7d: Math.round((p.length / 7) * 10) / 10,
+        day_note: notes.find((n) => n.member_id === m.id && n.date === day)?.note || null,
+      }
+    })
+    console.log(JSON.stringify({ date: day, people, recent_topics: [...new Set(ideas.map((i) => i.topic))] }, null, 2))
+  } else if (cmd === 'report') {
+    const date = a.date || vnToday()
+    const items = a.file ? JSON.parse(readFileSync(a.file, 'utf8')) : [{ member: a.member || null, text: a.text }]
+    const rows = items.map((it) => {
+      if (!it.text || typeof it.text !== 'string') die('Thiếu nội dung "text"')
+      return { date: it.date || date, member_id: byName(it.member), text: it.text }
+    })
+    // Một ngày một báo cáo cho mỗi người (member null = báo cáo chung): ghi đè nếu chạy lại
+    for (const r of rows) {
+      let s = sb.from('team_reports').delete().eq('date', r.date)
+      s = r.member_id ? s.eq('member_id', r.member_id) : s.is('member_id', null)
+      await q(s)
+    }
+    await q(sb.from('team_reports').insert(rows))
+    console.log(`OK: đã ghi ${rows.length} báo cáo cho ngày ${date}.`)
+  } else if (cmd === 'ideas') {
+    if (!a.file) die('Cần --file ideas.json')
+    const date = a.date || vnToday()
+    const items = JSON.parse(readFileSync(a.file, 'utf8'))
+    const rows = items.map((it) => {
+      if (!it.topic) die('Mỗi thẻ cần "topic"')
+      return { date: it.date || date, topic: it.topic, question: it.question || null, angle: it.angle || null, gift_doc: it.gift_doc || null, assigned_to: byName(it.assigned_to) }
+    })
+    await q(sb.from('seed_ideas').insert(rows))
+    console.log(`OK: đã thêm ${rows.length} thẻ gợi ý cho ngày ${date}.`)
+  } else {
+    die('Lệnh không hợp lệ: ' + cmd + ' (xem: node scripts/bot.mjs help)')
+  }
+  await sb.auth.signOut()
+}
+
+main().catch((e) => die(e.message))

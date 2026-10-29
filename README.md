@@ -70,9 +70,9 @@ npm run bot -- check
 Lần đầu macOS có thể hỏi "node muốn dùng keychain" → bấm **Always Allow**.
 
 ### 6. Đưa code lên GitHub
-Tạo repo mới trên GitHub (tài khoản `thienbkyt`), tên `kytich-team-dashboard`, chọn **Public**, **không** tick tạo README. (Repo public không chứa mật khẩu nào: `.env.local` không bị đẩy lên.) Rồi:
+Tạo repo mới trên GitHub (tài khoản `khanhthien4698-ops`), tên `kytich-team-dashboard`, chọn **Public**, **không** tick tạo README. (Repo public không chứa mật khẩu nào: `.env.local` không bị đẩy lên.) Rồi:
 ```bash
-git remote add origin https://github.com/thienbkyt/kytich-team-dashboard.git
+git remote add origin https://github.com/khanhthien4698-ops/kytich-team-dashboard.git
 git push -u origin main
 ```
 
@@ -82,7 +82,7 @@ git push -u origin main
 |---|---|---|
 | Giá | Miễn phí | Miễn phí |
 | Repo | Private được | **Phải public** (gói free) |
-| Link | `kytich-team.pages.dev` (gắn tên miền riêng được) | `thienbkyt.github.io/kytich-team-dashboard` |
+| Link | `kytich-team.pages.dev` (gắn tên miền riêng được) | `khanhthien4698-ops.github.io/kytich-team-dashboard` |
 | Tự cập nhật khi push | Có | Có (qua GitHub Actions) |
 
 **A. Cloudflare Pages** (hoặc Vercel làm tương tự):
@@ -95,7 +95,7 @@ git push -u origin main
 1. Workflow đã có sẵn ở `.github/workflows/pages.yml`, push lên là tự build.
 2. Repo → **Settings → Pages → Source: GitHub Actions**.
 3. Repo → **Settings → Secrets and variables → Actions → tab Variables → New repository variable**: thêm 3 biến `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LOGIN_DOMAIN` (= `aptiskytich.vn`). anon key là key công khai nên để ở Variables được.
-4. Vào tab **Actions** chạy lại workflow → link `https://thienbkyt.github.io/kytich-team-dashboard/`.
+4. Vào tab **Actions** chạy lại workflow → link `https://khanhthien4698-ops.github.io/kytich-team-dashboard/`.
 
 Sau khi có link: Supabase → **Authentication → URL Configuration → Site URL** = link đó (cho chắc, đăng nhập mật khẩu không bắt buộc bước này).
 

@@ -320,3 +320,33 @@ table.eff { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 
 .toast { position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); background: var(--brown); color: #fff; padding: 11px 18px; border-radius: 14px; font-size: 14px; font-weight: 600; z-index: 60; max-width: calc(100vw - 32px); box-shadow: var(--shadow-lg); }
 .toast.bad { background: var(--red); }
 .row > img, .card-h > img { width: 64px; height: 64px; flex: none; }
+
+/* ---------- Tổng quan gọn ---------- */
+.ov-hero { padding: 18px 20px; }
+.ov-hero .mascot { width: 84px; height: 84px; }
+.big-pct { font-size: 52px; font-weight: 900; line-height: 1; color: #fff; }
+.big-pct small { font-size: 24px; opacity: .8; }
+.ov-line { font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, .85); margin-top: 4px; }
+@media (min-width: 900px) { .ov-hero { grid-template-columns: 1fr; } .ov-hero .mascot { width: 110px; height: 110px; } .big-pct { font-size: 64px; } }
+.todo { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 16px; background: var(--cream); }
+.todo .dot { width: 12px; height: 12px; border-radius: 999px; flex: none; }
+.todo.r { background: #fff1ee; } .todo.r .dot { background: var(--red); }
+.todo.y { background: #fff8e6; } .todo.y .dot { background: var(--yellow); }
+.plist { display: flex; flex-direction: column; gap: 10px; }
+.prow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px; border-radius: 18px; border: 1.5px solid var(--line); background: #fff; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.prow:hover, .prow.on { border-color: var(--orange); box-shadow: 0 6px 18px rgba(254, 173, 95, .2); }
+.prow .ring .val { font-size: 13px; }
+.prow .ring .val small { font-size: 9px; }
+.prow-name { font-weight: 800; font-size: 15px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.prow-stats { display: flex; gap: 12px; font-size: 13px; font-weight: 700; color: var(--brown-2); margin-top: 3px; flex-wrap: wrap; }
+.days7 { display: grid; grid-template-columns: repeat(7, 12px); gap: 5px; }
+.days7 .d { width: 12px; height: 12px; border-radius: 4px; border: none; padding: 0; cursor: pointer; }
+.days7 .d.g { background: var(--green); } .days7 .d.y { background: var(--yellow); } .days7 .d.r { background: var(--red); } .days7 .d.n { background: var(--line); cursor: default; }
+.days7 .d.sel { outline: 2px solid var(--brown); outline-offset: 1px; }
+.days7 { margin-top: 8px; }
+@media (max-width: 520px) { .days7 { grid-template-columns: repeat(7, 1fr); } .days7 .d { width: 100%; height: 10px; } }
+.pdetail { margin: 8px 0 4px; padding: 14px; border-radius: 16px; background: var(--cream); }
+.more-card summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.more-card summary::-webkit-details-marker { display: none; }
+.more-card summary::after { content: '▾'; margin-left: auto; color: var(--muted); }
+.more-card[open] summary { margin-bottom: 8px; }

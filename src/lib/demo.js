@@ -23,7 +23,7 @@ function seed() {
   const groups = ['Cộng đồng ôn thi Aptis', 'Aptis ESOL - Chia sẻ đề thi', 'Luyện thi Aptis B1 B2', 'Hội sinh viên thi Aptis'].map((name, i) => ({ id: uid(), name, url: 'https://facebook.com/groups/demo' + i, active: true, sort_order: i }))
   const daily_checks = [], seeding_posts = [], extra_tasks = [], day_notes = []
   // 7 ngày qua: TV1 chăm, TV2 lưng chừng, TV3 có ngày bỏ
-  for (let k = 7; k >= 0; k--) {
+  for (let k = 30; k >= 0; k--) {
     const date = addDays(today, -k)
     staff.forEach((s, si) => {
       const rs = routines.filter((r) => r.member_id === s.id)
@@ -49,7 +49,29 @@ function seed() {
     { id: uid(), date: today, member_id: null, text: 'Hôm qua: Thành viên 1 đủ việc 3/3, seeding 5/5. Thành viên 2 việc 2/3, seeding 3/5 (thiếu 2). Thành viên 3 chưa ghi gì.\nTrung bình 7 ngày: 4,1 bài/người/ngày.', created_at: new Date().toISOString() },
     { id: uid(), date: today, member_id: staff[1].id, text: 'Hôm qua bạn làm 2/3 việc, seeding 3/5. Hôm nay nhớ bù 2 bài nhé.', created_at: new Date().toISOString() },
   ]
-  return { members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports }
+  // Bot đã chấm các bài trước hôm nay
+  const seeding_reviews = []
+  const goods = ['Câu mở nêu đúng nỗi lo của người hỏi', 'Trả lời đúng trọng tâm, có ví dụ cụ thể', 'Có tặng tài liệu kèm, nhiều người xin']
+  const improves = ['Đoạn đầu hơi dài, nên vào ý chính trong 2 dòng đầu', 'Thiếu ví dụ minh hoạ', 'Link đặt ngay câu đầu dễ bị coi là spam']
+  const suggs = ['Mở bằng câu hỏi: “Bạn nào thi Speaking cũng bí ý ở Part 4?”', 'Thêm 1 ví dụ câu trả lời mẫu ngắn', 'Để link ở comment đầu thay vì trong bài']
+  seeding_posts.filter((p) => p.date < today).forEach((p, i) => {
+    const removed = i % 17 === 5
+    const flags = i % 23 === 7 ? ['spam_link'] : i % 41 === 11 ? ['sai_group'] : []
+    seeding_reviews.push({
+      id: uid(), post_id: p.id, checked_at: addDays(p.date, 1) + 'T01:30:00.000Z',
+      status: removed ? 'removed' : 'live',
+      reactions: removed ? null : (i * 7) % 40 + 2, comments: removed ? null : (i * 3) % 15, shares: removed ? null : i % 4,
+      score: removed ? 1 : flags.length ? 2 : (i % 4) + 2,
+      good: removed ? null : goods[i % 3], improve: improves[i % 3], suggestion: suggs[i % 3], rule_flags: flags,
+    })
+  })
+  const yday = addDays(today, -1)
+  const member_feedback = staff.map((s, si) => ({ id: uid(), date: yday, member_id: s.id, text: [
+    'Hôm qua 5/5 bài đều còn sống, trung bình 3,8 điểm. Bài Speaking Part 4 hút nhất (28 tương tác). Thử viết câu mở ngắn hơn ở các bài comment.',
+    'Hôm qua 3/5 bài, 1 bài bị admin group gỡ vì để link ngay đầu bài. Lần sau để link ở comment đầu nhé.',
+    'Hôm qua chưa có bài nào để chấm.',
+  ][si] }))
+  return { members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
 }
 
 const db = seed()

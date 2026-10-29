@@ -3,6 +3,7 @@ import * as api from '../lib/api.js'
 import { vnToday, addDays, rangeDays, ddmm, weekday, longDate, monthStart, timeVN } from '../lib/date.js'
 import { useToast } from '../App.jsx'
 import { KIND } from './Today.jsx'
+import Review, { isBad } from '../components/Review.jsx'
 
 // Màu ô: xanh = đủ việc + đủ seeding; đỏ = không làm gì; vàng = có làm nhưng thiếu
 function score(m, date, data, routines, today) {
@@ -16,10 +17,14 @@ function score(m, date, data, routines, today) {
   const y = rIds.size + extras.length
   const a = posts.length
   const b = m.seeding_quota
+  const rv = posts.map((p) => data.reviewOf[p.id]).filter(Boolean)
+  const scores = rv.map((r) => r.score).filter(Boolean)
+  const avg = scores.length ? scores.reduce((s, v) => s + v, 0) / scores.length : null
+  const bad = rv.filter(isBad).length
   let cls = 'y'
   if (x === 0 && a === 0 && !note) cls = 'r'
   else if (x >= y && a >= b) cls = 'g'
-  return { cls, x, y, a, b }
+  return { cls, x, y, a, b, avg, bad }
 }
 
 export default function Board() {
@@ -41,12 +46,12 @@ export default function Board() {
   const load = useCallback(async () => {
     try {
       const ms0 = monthStart(today)
-      const [ms, rs, d, mo, ideas, rep] = await Promise.all([
+      const [ms, rs, d, mo, ideas, rep, reviews] = await Promise.all([
         api.listMembers(), api.listRoutines(), api.getRange(start, end),
-        api.getRange(ms0, today), api.listIdeasRange(ms0, today), api.listReports(addDays(today, -13), today),
+        api.getRange(ms0, today), api.listIdeasRange(ms0, today), api.listReports(addDays(today, -13), today), api.listReviewsSince(start),
       ])
       setMembers(ms.filter((m) => m.active && m.role === 'staff')); setRoutines(rs)
-      setData(d); setMonth({ ...mo, ideas }); setReports(rep.filter((r) => !r.member_id))
+      setData({ ...d, reviewOf: Object.fromEntries(reviews.map((r) => [r.post_id, r])) }); setMonth({ ...mo, ideas }); setReports(rep.filter((r) => !r.member_id))
     } catch (x) { notify(x.message, true) }
   }, [start, end, today, notify])
 
@@ -95,6 +100,7 @@ export default function Board() {
                         {s.cls === 'n' ? <div className="cell n">—</div> : (
                           <button className={`cell ${s.cls}${on ? ' sel' : ''}`} onClick={() => setSel(on ? null : { m, d })}>
                             Việc {s.x}/{s.y}<br />Seed {s.a}/{s.b}
+                            {(s.avg || s.bad > 0) && <span className="q">{s.avg ? '★' + s.avg.toFixed(1) : ''}{s.bad > 0 ? ' ⚠' + s.bad : ''}</span>}
                           </button>
                         )}
                       </td>
@@ -109,7 +115,7 @@ export default function Board() {
           <span><i style={{ background: 'var(--green-soft)', border: '1px solid var(--green)' }} />Đủ việc + đủ seeding</span>
           <span><i style={{ background: 'var(--yellow-soft)', border: '1px solid var(--yellow)' }} />Có làm, còn thiếu</span>
           <span><i style={{ background: 'var(--red-soft)', border: '1px solid var(--red)' }} />Không làm gì</span>
-          <span className="sub">Bấm vào ô để xem chi tiết</span>
+          <span className="sub">★ điểm bot chấm TB · ⚠ số bài bị gỡ/vi phạm · Bấm ô xem chi tiết</span>
         </div>
       </div>
 
@@ -161,6 +167,7 @@ function Detail({ m, d, data, routines, onClose }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <a href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
                 <div className="meta"><span className={'pill' + (p.kind === 'comment' ? ' c' : '')}>{KIND[p.kind]}</span> {p.group_name}{p.created_at ? ' · ' + timeVN(p.created_at) : ''}</div>
+                <Review r={data.reviewOf[p.id]} />
               </div>
             </div>
           ))}

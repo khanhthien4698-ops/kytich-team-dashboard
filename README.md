@@ -122,6 +122,32 @@ npm run bot -- ideas --file ideas.json                 # xem scripts/examples/id
 - Chạy lại `report` cùng ngày sẽ ghi đè báo cáo cũ của ngày đó.
 - Câu hỏi trong thẻ gợi ý phải **viết lại**, bỏ hết tên/SĐT/thông tin khách.
 
+## Bot chấm bài seeding (chạy mỗi sáng)
+Cần dán thêm `supabase/002_seeding_review.sql` vào SQL Editor (sau file 001).
+
+Quy trình cho lịch tự động:
+1. `npm run bot -- to-review` → JSON các bài **hôm qua** chưa chấm (`post_id`, người đăng, link, group, loại, chủ đề gợi ý).
+2. Dùng Claude in Chrome mở từng link, **CHỈ ĐỌC**: không like, không comment, không chia sẻ, không đăng gì lên Facebook.
+3. Chấm theo tiêu chí dưới, viết vào 1 file JSON theo mẫu `scripts/examples/reviews.example.json`.
+4. `npm run bot -- reviews --file reviews.json` → ghi review từng bài + nhận xét tổng từng người. Chạy lại thì ghi đè.
+
+Kết quả hiện ở: "Hôm nay của tôi → Góp ý hôm qua" (mỗi bạn chỉ thấy của mình), ô Bảng tổng (★ điểm TB, ⚠ số bài bị gỡ/vi phạm), tab **Hiệu quả** (7/30 ngày theo người, theo group, top 5 bài).
+
+**Tiêu chí chấm**
+| Trường | Cách điền |
+|---|---|
+| `status` | `live` còn hiện; `removed` bị admin group gỡ / không còn; `pending` đang chờ admin duyệt; `unreachable` không mở được (riêng tư, lỗi mạng, cần đăng nhập) |
+| `reactions`, `comments`, `shares` | Số đếm được lúc mở (khoảng 24 giờ sau khi đăng). Không thấy thì để `null` |
+| `score` 1–5 | 5: trả lời đúng câu hỏi thật, có giá trị rõ, câu mở hút, tương tác tốt. 3: ổn nhưng chung chung hoặc tương tác thấp. 1: bị gỡ hoặc vi phạm quy tắc |
+| `good` | 1 câu: điểm làm tốt (câu mở, đúng trọng tâm, có ví dụ, có tài liệu tặng…) |
+| `improve` | 1 câu: điều cần sửa |
+| `suggestion` | 1–2 câu cụ thể: câu mở viết lại, hoặc ý cho bài tiếp theo |
+| `rule_flags` | `dong_vai_hoc_vien` (giả làm học viên), `chep_tin_khach` (chép nguyên tin nhắn khách), `spam_link` (link lộ liễu / dồn dập), `sai_group` (không hợp chủ đề group). Không vi phạm thì `[]` |
+
+Nhận xét tổng (`feedback`): mỗi bạn 2–3 câu: bao nhiêu bài còn sống, điểm TB, bài tốt nhất, 1 việc nên làm khác hôm nay.
+
+**Không** chép tên, ảnh hay thông tin của người khác trong group (người hỏi, người comment) vào review hay nhận xét.
+
 ## Để sau
 - Danh sách khách (CRM): tab "Khách (sắp có)" đã chừa sẵn, sẽ thêm bảng `customers` ở `supabase/002_*.sql`.
-- Kiểm thử RLS cục bộ: `supabase/test_rls.sql` (chạy trên Postgres local có giả lập `auth.jwt()`, không chạy trên Supabase thật).
+- Kiểm thử RLS cục bộ: `supabase/test_rls.sql`, `supabase/test_rls_002.sql` (chạy trên Postgres local có giả lập `auth.jwt()`, không chạy trên Supabase thật).

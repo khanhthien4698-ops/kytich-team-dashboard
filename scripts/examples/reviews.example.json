@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-29",
+  "reviews": [
+    {
+      "post_id": "uuid-lấy-từ-lệnh-to-review",
+      "status": "live",
+      "reactions": 24,
+      "comments": 7,
+      "shares": 1,
+      "score": 4,
+      "good": "Câu mở nêu đúng nỗi lo bí ý ở Speaking Part 4, có khung 4 bước dễ làm theo.",
+      "improve": "Đoạn giữa hơi dài, người đọc lướt dễ bỏ qua.",
+      "suggestion": "Rút đoạn giữa còn 3 gạch đầu dòng, cuối bài hỏi lại: \"Bạn hay bí ở bước nào?\"",
+      "rule_flags": []
+    },
+    {
+      "post_id": "uuid-bài-khác",
+      "status": "removed",
+      "reactions": null,
+      "comments": null,
+      "shares": null,
+      "score": 1,
+      "good": null,
+      "improve": "Bài bị admin group gỡ, có thể do để link ngay câu đầu.",
+      "suggestion": "Đăng lại không kèm link, để link ở comment khi có người hỏi.",
+      "rule_flags": ["spam_link"]
+    }
+  ],
+  "feedback": [
+    { "member": "Thành viên 1", "text": "Hôm qua 5/5 bài còn sống, điểm TB 3,8. Bài Speaking Part 4 hút nhất. Thử viết câu mở ngắn hơn ở các comment." },
+    { "member": "Thành viên 2", "text": "Hôm qua 3/5 bài, 1 bài bị gỡ vì để link đầu bài. Lần sau để link ở comment nhé." }
+  ]
+}

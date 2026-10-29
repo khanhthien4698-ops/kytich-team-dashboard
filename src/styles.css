@@ -169,3 +169,28 @@ table.board { border-collapse: collapse; min-width: 720px; width: 100%; font-siz
 .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--brown); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 50; max-width: calc(100vw - 32px); }
 .toast.bad { background: var(--red); }
 .demo-banner { background: var(--orange); color: var(--brown); text-align: center; font-size: 12px; font-weight: 700; padding: 4px 8px; }
+
+/* ---------- Bot chấm seeding ---------- */
+.review { margin-top: 6px; background: #fbf6f3; border-left: 3px solid var(--orange); border-radius: 8px; padding: 7px 9px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.review.bad { border-left-color: var(--red); background: #fff1ee; }
+.review.none { border-left-color: var(--line); color: var(--muted); }
+.review-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--orange-soft); }
+.tag.ok { background: var(--green-soft); color: #11663a; }
+.tag.bad { background: var(--red-soft); color: var(--red); }
+.tag.warn { background: var(--yellow-soft); color: #7a5600; }
+.flags { display: flex; gap: 6px; flex-wrap: wrap; }
+.stars { color: var(--yellow); letter-spacing: 1px; font-size: 13px; }
+.stars .dim { color: #e8dcd6; }
+.k-good { color: var(--green); }
+.k-bad { color: var(--red); }
+.k-sug { color: #8a4b00; }
+.cell .q { display: block; font-size: 11px; opacity: .85; }
+.seg.inline { display: inline-flex; }
+.seg.inline button { flex: none; padding: 5px 12px; font-size: 13px; }
+table.eff { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+.eff th, .eff td { padding: 7px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.eff th:first-child, .eff td:first-child { text-align: left; white-space: normal; }
+.eff th { background: #fff4ee; }
+.top-post { padding: 10px 0; border-top: 1px solid var(--line); }
+.top-post:first-of-type { border-top: none; }

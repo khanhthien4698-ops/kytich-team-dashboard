@@ -3,6 +3,7 @@ import { sb, CONFIGURED, DEMO, getMe, signIn, signOut, changePassword } from './
 import Today from './pages/Today.jsx'
 import Board from './pages/Board.jsx'
 import Settings from './pages/Settings.jsx'
+import Effect from './pages/Effect.jsx'
 
 const ToastCtx = createContext(() => {})
 export const useToast = () => useContext(ToastCtx)
@@ -50,7 +51,7 @@ function Shell({ me }) {
   const isAdmin = me.role === 'admin'
   const [tab, setTab] = useState(() => {
     const h = location.hash.slice(1)
-    return isAdmin && ['board', 'settings'].includes(h) ? h : isAdmin ? 'board' : 'today'
+    return isAdmin && ['board', 'effect', 'settings'].includes(h) ? h : isAdmin ? 'board' : 'today'
   })
   const go = (t) => { setTab(t); history.replaceState(null, '', '#' + t) }
   const [pwOpen, setPwOpen] = useState(false)
@@ -78,6 +79,7 @@ function Shell({ me }) {
       <nav className="tabs">
         <button className={'tab' + (tab === 'today' ? ' on' : '')} onClick={() => go('today')}>Hôm nay của tôi</button>
         {isAdmin && <button className={'tab' + (tab === 'board' ? ' on' : '')} onClick={() => go('board')}>Bảng tổng</button>}
+        {isAdmin && <button className={'tab' + (tab === 'effect' ? ' on' : '')} onClick={() => go('effect')}>Hiệu quả</button>}
         {isAdmin && <button className={'tab' + (tab === 'settings' ? ' on' : '')} onClick={() => go('settings')}>Cài đặt</button>}
         {isAdmin && <button className="tab" disabled title="Sẽ làm sau">Khách (sắp có)</button>}
       </nav>
@@ -85,6 +87,7 @@ function Shell({ me }) {
         {pwOpen && <PasswordBox onDone={() => setPwOpen(false)} />}
         {tab === 'today' && <Today me={me} />}
         {tab === 'board' && isAdmin && <Board />}
+        {tab === 'effect' && isAdmin && <Effect />}
         {tab === 'settings' && isAdmin && <Settings me={me} />}
       </main>
     </>

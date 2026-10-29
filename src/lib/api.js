@@ -98,3 +98,14 @@ function saver(table) {
 export const saveMember = saver('members')
 export const saveRoutine = saver('routines')
 export const saveGroup = saver('seed_groups')
+
+// ---------- Bot chấm seeding ----------
+// Review được bot ghi vào hôm sau, nên lọc theo checked_at từ ngày bắt đầu (giờ VN).
+export const listReviewsSince = (fromDate) =>
+  q(sb.from('seeding_reviews').select('*').gte('checked_at', fromDate + 'T00:00:00+07:00'))
+export const getFeedback = (memberId, date) =>
+  q(sb.from('member_feedback').select('*').eq('member_id', memberId).eq('date', date).maybeSingle())
+export const listFeedback = (from, to) =>
+  q(sb.from('member_feedback').select('*').gte('date', from).lte('date', to))
+export const listPostsRange = (from, to) =>
+  q(sb.from('seeding_posts').select('*').gte('date', from).lte('date', to))

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as api from '../lib/api.js'
-import { vnToday, longDate, timeVN } from '../lib/date.js'
+import { vnToday, longDate, timeVN, addDays } from '../lib/date.js'
+import Review from '../components/Review.jsx'
 import { useToast } from '../App.jsx'
 
 export const KIND = { post: 'Bài đăng', comment: 'Comment' }
@@ -72,6 +73,8 @@ export default function Today({ me }) {
           <div style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{day.report.text}</div>
         </div>
       )}
+
+      <YesterdayFeedback who={who} today={date} />
 
       <div className="grid2">
         <div>
@@ -327,6 +330,41 @@ function DayNote({ date, who, note, setDay }) {
           <button className="btn block" style={{ marginTop: 8 }}>Xong ngày</button>
         </form>
       )}
+    </section>
+  )
+}
+
+function YesterdayFeedback({ who, today }) {
+  const yday = addDays(today, -1)
+  const [data, setData] = useState(null)
+  useEffect(() => {
+    let live = true
+    Promise.all([api.getDay(who.id, yday), api.listReviewsSince(yday), api.getFeedback(who.id, yday)])
+      .then(([d, reviews, fb]) => live && setData({ posts: d.posts, reviews, fb }))
+      .catch(() => live && setData({ posts: [], reviews: [], fb: null }))
+    return () => { live = false }
+  }, [who.id, yday])
+  if (!data || (!data.fb && data.posts.length === 0)) return null
+  const reviewOf = (id) => data.reviews.find((r) => r.post_id === id)
+  const scored = data.posts.map((p) => reviewOf(p.id)?.score).filter(Boolean)
+  const avg = scored.length ? (scored.reduce((a, b) => a + b, 0) / scored.length).toFixed(1) : null
+  return (
+    <section className="card">
+      <div className="card-h">
+        <h2>Góp ý hôm qua</h2>
+        {avg && <span className="count">★ {avg}/5</span>}
+      </div>
+      {data.fb ? <p style={{ margin: '0 0 6px', whiteSpace: 'pre-wrap' }}>{data.fb.text}</p> : <p className="empty">Bot chưa chấm bài hôm qua (thường xong lúc 8h sáng).</p>}
+      {data.posts.map((p, i) => (
+        <div key={p.id} className="post">
+          <b>{i + 1}.</b>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <a href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
+            <div className="meta"><span className={'pill' + (p.kind === 'comment' ? ' c' : '')}>{KIND[p.kind]}</span> {p.group_name}</div>
+            <Review r={reviewOf(p.id)} />
+          </div>
+        </div>
+      ))}
     </section>
   )
 }

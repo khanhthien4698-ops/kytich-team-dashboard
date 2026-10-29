@@ -7,6 +7,8 @@
 //   node scripts/bot.mjs report --text "..." [--member "Thành viên 1"] [--date YYYY-MM-DD]
 //   node scripts/bot.mjs report --file report.json   # [{ "member": null|"Tên", "text": "..." }, ...]
 //   node scripts/bot.mjs ideas --file ideas.json     # [{ "topic","question","angle","gift_doc","assigned_to":"Tên" }, ...]
+//   node scripts/bot.mjs to-review [YYYY-MM-DD] [--all]  # JSON các bài seeding hôm qua chưa chấm (--all: cả bài đã chấm)
+//   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
 //
 // Cấu hình: đọc VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_LOGIN_DOMAIN từ .env.local (hoặc biến môi trường).
 // BOT_EMAIL mặc định bot@<domain>. Keychain service: kytich-dashboard-bot (account = BOT_EMAIL).
@@ -63,7 +65,7 @@ function args(argv) {
 async function main() {
   const a = args(process.argv.slice(2))
   const cmd = a._[0]
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 12).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 14).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -133,6 +135,54 @@ async function main() {
     })
     await q(sb.from('seed_ideas').insert(rows))
     console.log(`OK: đã thêm ${rows.length} thẻ gợi ý cho ngày ${date}.`)
+  } else if (cmd === 'to-review') {
+    const day = a._[1] || addDays(vnToday(), -1)
+    const posts = await q(sb.from('seeding_posts').select('*').eq('date', day).order('created_at'))
+    const ids = posts.map((p) => p.id)
+    const done = ids.length ? await q(sb.from('seeding_reviews').select('post_id').in('post_id', ids)) : []
+    const doneSet = new Set(done.map((r) => r.post_id))
+    const ideaIds = [...new Set(posts.map((p) => p.idea_id).filter(Boolean))]
+    const ideas = ideaIds.length ? await q(sb.from('seed_ideas').select('id,topic').in('id', ideaIds)) : []
+    const nameOf = Object.fromEntries(members.map((m) => [m.id, m.name]))
+    const out = posts.filter((p) => a.all || !doneSet.has(p.id)).map((p) => ({
+      post_id: p.id, member: nameOf[p.member_id], date: p.date, posted_at: p.created_at, url: p.url,
+      group: p.group_name, kind: p.kind, idea_topic: ideas.find((i) => i.id === p.idea_id)?.topic || null,
+      already_reviewed: doneSet.has(p.id),
+    }))
+    console.log(JSON.stringify({ date: day, total_posts: posts.length, to_review: out.length, posts: out }, null, 2))
+  } else if (cmd === 'reviews') {
+    if (!a.file) die('Cần --file reviews.json')
+    const input = JSON.parse(readFileSync(a.file, 'utf8'))
+    const date = input.date || addDays(vnToday(), -1)
+    const STATUS = ['live', 'removed', 'pending', 'unreachable']
+    const FLAGS = ['dong_vai_hoc_vien', 'chep_tin_khach', 'spam_link', 'sai_group']
+    const int = (v, k) => {
+      if (v === null || v === undefined || v === '') return null
+      const n = Number(v)
+      if (!Number.isInteger(n) || n < 0) die(`"${k}" phải là số nguyên ≥ 0 hoặc null`)
+      return n
+    }
+    const reviews = (input.reviews || []).map((r) => {
+      if (!r.post_id) die('Mỗi review cần "post_id" (lấy từ lệnh to-review)')
+      if (!STATUS.includes(r.status)) die(`status phải là: ${STATUS.join(', ')}`)
+      const flags = r.rule_flags || []
+      const bad = flags.filter((f) => !FLAGS.includes(f))
+      if (bad.length) die(`rule_flags không hợp lệ: ${bad.join(', ')} (chỉ: ${FLAGS.join(', ')})`)
+      const score = r.score == null ? null : Number(r.score)
+      if (score != null && !(Number.isInteger(score) && score >= 1 && score <= 5)) die('score phải 1–5')
+      return {
+        post_id: r.post_id, checked_at: new Date().toISOString(), status: r.status,
+        reactions: int(r.reactions, 'reactions'), comments: int(r.comments, 'comments'), shares: int(r.shares, 'shares'),
+        score, good: r.good || null, improve: r.improve || null, suggestion: r.suggestion || null, rule_flags: flags,
+      }
+    })
+    const feedback = (input.feedback || []).map((f) => {
+      if (!f.text) die('Mỗi feedback cần "text"')
+      return { date: f.date || date, member_id: byName(f.member), text: f.text }
+    })
+    if (reviews.length) await q(sb.from('seeding_reviews').upsert(reviews, { onConflict: 'post_id' }))
+    if (feedback.length) await q(sb.from('member_feedback').upsert(feedback, { onConflict: 'date,member_id' }))
+    console.log(`OK: đã ghi ${reviews.length} review, ${feedback.length} nhận xét tổng (ngày ${date}).`)
   } else {
     die('Lệnh không hợp lệ: ' + cmd + ' (xem: node scripts/bot.mjs help)')
   }

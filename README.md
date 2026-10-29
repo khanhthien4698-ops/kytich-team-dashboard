@@ -70,7 +70,7 @@ npm run bot -- check
 Lần đầu macOS có thể hỏi "node muốn dùng keychain" → bấm **Always Allow**.
 
 ### 6. Đưa code lên GitHub
-Tạo repo mới trên GitHub (tài khoản `thienbkyt`), tên `kytich-team-dashboard`, **không** tick tạo README. Chọn Private hay Public theo cách host ở bước 7. Rồi:
+Tạo repo mới trên GitHub (tài khoản `thienbkyt`), tên `kytich-team-dashboard`, chọn **Public**, **không** tick tạo README. (Repo public không chứa mật khẩu nào: `.env.local` không bị đẩy lên.) Rồi:
 ```bash
 git remote add origin https://github.com/thienbkyt/kytich-team-dashboard.git
 git push -u origin main
@@ -91,10 +91,10 @@ git push -u origin main
 3. **Environment variables**: thêm `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LOGIN_DOMAIN` = `aptiskytich.vn`.
 4. **Save and Deploy** → được link `https://<tên>.pages.dev`.
 
-**B. GitHub Pages**:
-1. Copy `deploy/github-pages.yml` vào `.github/workflows/pages.yml`, commit, push.
+**B. GitHub Pages** (Thiện đã chọn cách này, repo public):
+1. Workflow đã có sẵn ở `.github/workflows/pages.yml`, push lên là tự build.
 2. Repo → **Settings → Pages → Source: GitHub Actions**.
-3. Repo → **Settings → Secrets and variables → Actions → Variables**: thêm 3 biến như trên.
+3. Repo → **Settings → Secrets and variables → Actions → tab Variables → New repository variable**: thêm 3 biến `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LOGIN_DOMAIN` (= `aptiskytich.vn`). anon key là key công khai nên để ở Variables được.
 4. Vào tab **Actions** chạy lại workflow → link `https://thienbkyt.github.io/kytich-team-dashboard/`.
 
 Sau khi có link: Supabase → **Authentication → URL Configuration → Site URL** = link đó (cho chắc, đăng nhập mật khẩu không bắt buộc bước này).

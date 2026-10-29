@@ -137,7 +137,7 @@ Bảng tổng ghi mỗi ô "Việc x/y · Bài a/b · Cmt c/d", ★ điểm bot 
 | Lịch | Chạy | Làm gì |
 |---|---|---|
 | `kytich-doi-nhom-10h` | mỗi 10 phút, 10:00–16:50 | chấm bài/comment hôm qua, góp ý, báo cáo đội nhóm, 8–12 thẻ gợi ý |
-| `kytich-doi-nhom-17h` | mỗi 10 phút, 17:00–23:50 | đọc group, ghi "Cơ hội seeding" |
+| `kytich-doi-nhom-17h` | mỗi 10 phút, 17:00–23:50 | đọc group (chỉ đọc, đọc chậm): ghi "Cơ hội seeding" + gom review đề thi 48h qua vào `CLAUDE OUTPUTS/<ngày mai>-key/review_raw.txt` (chỉ ghi thêm, đối chiếu trùng, không tự làm key) |
 
 Mỗi lần chạy, bot gọi `npm run bot -- run-start morning|evening` trước: `DONE` (hôm nay xong rồi) hoặc `BUSY` (lần trước đang chạy) thì dừng ngay; `GO` thì làm. Xong gọi `run-done`, lỗi gọi `run-fail` để 10 phút sau thử lại. Nhờ vậy máy bật muộn vẫn chạy đúng 1 lần/ngày. Trạng thái lưu ở `~/Library/Application Support/kytich-bot/` (khoá treo quá 60 phút tự bỏ).
 Lịch chỉ chạy khi app Claude đang mở và máy bật; Chrome phải đang đăng nhập Facebook.

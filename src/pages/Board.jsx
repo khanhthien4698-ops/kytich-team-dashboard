@@ -78,11 +78,13 @@ export default function Board({ go }) {
 
   // ---- Việc của Thiện: ngắn, mỗi dòng 1 hành động ----
   const todo = []
+  // Hôm qua cả team trống (vd ngày đầu dùng) thì không nhắc chuyện nghỉ
+  const teamWorkedYday = todayS.some((p) => p.y.cls !== 'r')
   todayS.forEach(({ m, s, y }) => {
     const n = shortName(m.name)
     if (hour >= 14 && s.cls === 'r') todo.push({ c: 'r', t: `Nhắc ${n} bắt đầu làm`, s: 'Chưa có gì hôm nay', go: () => open(m, today) })
     if (y.bad?.length) todo.push({ c: 'r', t: `Xem bài bị gỡ của ${n}`, s: `${y.bad.length} bài hôm qua`, go: () => open(m, yday) })
-    else if (y.cls === 'r') todo.push({ c: 'y', t: `Hỏi ${n} vì sao hôm qua nghỉ`, s: 'Không ghi gì hôm qua', go: () => open(m, yday) })
+    else if (teamWorkedYday && y.cls === 'r') todo.push({ c: 'y', t: `Hỏi ${n} vì sao hôm qua nghỉ`, s: 'Không ghi gì hôm qua', go: () => open(m, yday) })
   })
   if (newTargets + freeIdeas > 0) todo.push({ c: 'y', t: 'Nhắc team nhận việc', s: `${newTargets} bài cần comment · ${freeIdeas} thẻ gợi ý chưa ai nhận` })
   const pose = teamPct >= 1 ? 'trophy' : todo.some((a) => a.c === 'r') ? 'search' : 'cheer'

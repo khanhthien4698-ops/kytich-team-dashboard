@@ -35,7 +35,7 @@ export default function Settings({ me }) {
           Email đăng nhập phải trùng với tài khoản tạo trong Supabase (Authentication → Users). Tên đăng nhập “thanhvien1” = email thanhvien1@{api.LOGIN_DOMAIN}. Không xoá người, chỉ tắt.
         </p>
         {members.map((m) => <MemberRow key={m.id} m={m} isSelf={m.id === me.id} onSave={(row) => save(api.saveMember, row)} />)}
-        <MemberRow m={{ name: '', login_email: '', role: 'staff', seeding_quota: 5, active: true, sort_order: members.length }} isNew onSave={(row) => save(api.saveMember, row, 'Đã thêm thành viên')} />
+        <MemberRow m={{ name: '', login_email: '', role: 'staff', seeding_quota: 2, comment_quota: 5, active: true, sort_order: members.length }} isNew onSave={(row) => save(api.saveMember, row, 'Đã thêm thành viên')} />
       </section>
 
       <section className="card">
@@ -74,7 +74,7 @@ function MemberRow({ m, isNew, isSelf, onSave }) {
     e.preventDefault()
     if (!d.name.trim()) return
     const login_email = d.login_email.trim().toLowerCase()
-    onSave({ id: d.id, name: d.name.trim(), login_email: login_email ? api.toEmail(login_email) : null, role: d.role, seeding_quota: Number(d.seeding_quota) || 0, active: d.active, sort_order: Number(d.sort_order) || 0 })
+    onSave({ id: d.id, name: d.name.trim(), login_email: login_email ? api.toEmail(login_email) : null, role: d.role, seeding_quota: Number(d.seeding_quota) || 0, comment_quota: Number(d.comment_quota) || 0, active: d.active, sort_order: Number(d.sort_order) || 0 })
     if (isNew) setD(m)
   }
   return (
@@ -84,9 +84,14 @@ function MemberRow({ m, isNew, isSelf, onSave }) {
       <select className="input" value={d.role} onChange={set('role')} disabled={isSelf}>
         {Object.entries(ROLE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </select>
-      <label className="toggle" title="Chỉ tiêu seeding mỗi ngày">
-        <input className="input" type="number" min="0" max="50" style={{ width: 64, minHeight: 38 }} value={d.seeding_quota} onChange={set('seeding_quota')} /> bài/ngày
-      </label>
+      <div className="row">
+        <label className="toggle" title="Chỉ tiêu bài đăng mỗi ngày">
+          <input className="input" type="number" min="0" max="50" style={{ width: 58, minHeight: 38 }} value={d.seeding_quota} onChange={set('seeding_quota')} /> bài
+        </label>
+        <label className="toggle" title="Chỉ tiêu comment vào bài người khác mỗi ngày">
+          <input className="input" type="number" min="0" max="50" style={{ width: 58, minHeight: 38 }} value={d.comment_quota ?? 0} onChange={set('comment_quota')} /> cmt/ngày
+        </label>
+      </div>
       <div className="row">
         {!isNew && <label className="toggle"><input type="checkbox" checked={d.active} onChange={set('active')} disabled={isSelf} /> Đang làm</label>}
         <button className="btn sm" disabled={!dirty || !d.name.trim()}>{isNew ? 'Thêm' : 'Lưu'}</button>

@@ -7,7 +7,7 @@ const today = vnToday()
 const DOMAIN = 'aptiskytich.vn'
 
 function seed() {
-  const m = (name, login, role, quota, sort) => ({ id: uid(), name, login_email: `${login}@${DOMAIN}`, role, seeding_quota: quota, active: true, sort_order: sort })
+  const m = (name, login, role, quota, sort) => ({ id: uid(), name, login_email: `${login}@${DOMAIN}`, role, seeding_quota: quota ? 2 : 0, comment_quota: quota ? 5 : 0, active: true, sort_order: sort })
   const members = [
     m('Thiện', 'thien', 'admin', 0, 0),
     m('Thành viên 1', 'thanhvien1', 'staff', 5, 1),
@@ -28,11 +28,11 @@ function seed() {
     staff.forEach((s, si) => {
       const rs = routines.filter((r) => r.member_id === s.id)
       const doneN = k === 0 ? [2, 1, 0][si] : si === 0 ? 3 : si === 1 ? 2 : k % 3 === 0 ? 0 : 3
-      const postN = k === 0 ? [3, 5, 0][si] : si === 0 ? 5 : si === 1 ? 3 : k % 3 === 0 ? 0 : 5
+      const postN = k === 0 ? [3, 7, 0][si] : si === 0 ? 7 : si === 1 ? 4 : k % 3 === 0 ? 0 : 7
       rs.forEach((r, i) => daily_checks.push({ id: uid(), date, member_id: s.id, routine_id: r.id, done: i < doneN, note: null }))
       for (let p = 0; p < postN; p++) {
         const g = groups[(p + si) % groups.length]
-        seeding_posts.push({ id: uid(), date, member_id: s.id, url: `https://facebook.com/groups/demo/posts/${k}${si}${p}`, group_id: g.id, group_name: g.name, kind: p % 2 ? 'comment' : 'post', idea_id: null, created_at: new Date(Date.now() - k * 864e5 - p * 36e5).toISOString() })
+        seeding_posts.push({ id: uid(), date, member_id: s.id, url: `https://facebook.com/groups/demo/posts/${k}${si}${p}`, group_id: g.id, group_name: g.name, kind: p < 2 ? 'post' : 'comment', question: p < 2 ? null : ['Hỏi nên ôn Speaking Part 4 thế nào', 'Hỏi tài liệu Writing', 'Than nghe Part 2 hay sai', 'Hỏi lịch thi tháng sau', 'Hỏi key đề Reading'][p % 5], target_id: null, idea_id: null, created_at: new Date(Date.now() - k * 864e5 - p * 36e5).toISOString() })
       }
       if (k > 0 && doneN) day_notes.push({ id: uid(), date, member_id: s.id, note: 'Hôm nay group Aptis ESOL tương tác tốt.' })
     })
@@ -56,11 +56,13 @@ function seed() {
   const suggs = ['Mở bằng câu hỏi: “Bạn nào thi Speaking cũng bí ý ở Part 4?”', 'Thêm 1 ví dụ câu trả lời mẫu ngắn', 'Để link ở comment đầu thay vì trong bài']
   seeding_posts.filter((p) => p.date < today).forEach((p, i) => {
     const removed = i % 17 === 5
+    const hidden = !removed && p.kind === 'comment' && i % 29 === 3
     const flags = i % 23 === 7 ? ['spam_link'] : i % 41 === 11 ? ['sai_group'] : []
     seeding_reviews.push({
       id: uid(), post_id: p.id, checked_at: addDays(p.date, 1) + 'T01:30:00.000Z',
-      status: removed ? 'removed' : 'live',
+      status: removed ? 'removed' : hidden ? 'hidden' : 'live',
       reactions: removed ? null : (i * 7) % 40 + 2, comments: removed ? null : (i * 3) % 15, shares: removed ? null : i % 4,
+      asker_replied: p.kind === 'comment' && !removed ? i % 3 !== 0 : null,
       score: removed ? 1 : flags.length ? 2 : (i % 4) + 2,
       good: removed ? null : goods[i % 3], improve: improves[i % 3], suggestion: suggs[i % 3], rule_flags: flags,
     })
@@ -71,7 +73,21 @@ function seed() {
     'Hôm qua 3/5 bài, 1 bài bị admin group gỡ vì để link ngay đầu bài. Lần sau để link ở comment đầu nhé.',
     'Hôm qua chưa có bài nào để chấm.',
   ][si] }))
-  return { members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
+  // Cơ hội seeding bot tìm lúc 17h hôm qua + hôm nay
+  const tq = [
+    ['Bạn hỏi thi Aptis ESOL cần bao nhiêu điểm Speaking để đạt B1', 'Giải thích thang điểm + mẹo Part 4'],
+    ['Bạn than nghe Listening Part 2 toàn chọn sai dù nghe được từ khoá', 'Nói về bẫy từ đồng nghĩa, kèm 1 ví dụ'],
+    ['Bạn hỏi nên tự ôn hay học lớp khi còn 3 tuần', 'Gợi ý lộ trình 3 tuần, không quảng cáo lộ'],
+    ['Bạn hỏi xin key đề Reading tháng này', 'Chia sẻ dạng bài hay gặp, nhắc không có key chính thức'],
+    ['Bạn hỏi Writing Part 4 viết email trang trọng mở đầu thế nào', '3 câu mở mẫu + lỗi hay gặp'],
+  ]
+  const seed_targets = tq.map(([question, angle], i) => ({
+    id: uid(), date: i < 2 ? addDays(today, -1) : today, url: `https://facebook.com/groups/demo/posts/t${i}`,
+    group_id: groups[i % 4].id, group_name: groups[i % 4].name, question, angle, assigned_to: staff[i % 3].id,
+    status: i === 0 ? 'commented' : i === 1 ? 'skipped' : i === 2 ? 'taken' : 'new', taken_by: i <= 2 ? staff[i % 3].id : null,
+    taken_at: null, post_id: null, created_at: new Date().toISOString(),
+  }))
+  return { seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
 }
 
 const db = seed()
@@ -131,10 +147,22 @@ function me() { return db.members.find((m) => m.login_email === session?.user.em
 
 export const demoClient = {
   from: (t) => new Query(t),
-  async rpc(fn, { p_idea }) {
+  async rpc(fn, { p_idea } = {}) {
     const idea = db.seed_ideas.find((i) => i.id === p_idea)
     const m = me()
     if (fn === 'take_idea') { if (!idea || idea.taken_by) return { data: false, error: null }; idea.taken_by = m.id; idea.taken_at = new Date().toISOString(); return { data: true, error: null } }
+    const t = db.seed_targets.find((x) => x.id === arguments[1].p_target)
+    if (fn === 'take_target') { if (!t || t.status !== 'new') return { data: false, error: null }; Object.assign(t, { status: 'taken', taken_by: m.id }); return { data: true, error: null } }
+    if (fn === 'set_target_status') {
+      const st = arguments[1].p_status
+      if (!t || !['new', 'taken'].includes(t.status) || (t.taken_by && t.taken_by !== m.id && m.role !== 'admin')) return { data: false, error: null }
+      Object.assign(t, { status: st, taken_by: st === 'new' ? null : t.taken_by || m.id }); return { data: true, error: null }
+    }
+    if (fn === 'complete_target') {
+      if (!t || t.status === 'commented' || t.status === 'skipped' || (t.taken_by && t.taken_by !== m.id)) return { data: null, error: { message: 'Cơ hội này đã có người khác nhận' } }
+      const post = { id: uid(), date: today, member_id: m.id, url: arguments[1].p_url, group_id: t.group_id, group_name: t.group_name, kind: 'comment', question: t.question, target_id: t.id, idea_id: null, created_at: new Date().toISOString() }
+      db.seeding_posts.push(post); Object.assign(t, { status: 'commented', taken_by: m.id, post_id: post.id }); return { data: post.id, error: null }
+    }
     if (fn === 'release_idea') { if (!idea || (idea.taken_by !== m.id && m.role !== 'admin')) return { data: false, error: null }; idea.taken_by = null; return { data: true, error: null } }
     return { data: null, error: { message: 'rpc không có trong demo' } }
   },

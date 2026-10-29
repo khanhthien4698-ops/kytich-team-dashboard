@@ -1,6 +1,7 @@
 // Hiển thị kết quả bot chấm 1 bài seeding
 export const STATUS = {
   live: { label: 'Còn sống', cls: 'ok' },
+  hidden: { label: 'Bị ẩn', cls: 'bad' },
   removed: { label: 'Bị gỡ', cls: 'bad' },
   pending: { label: 'Chờ duyệt', cls: 'warn' },
   unreachable: { label: 'Không mở được', cls: 'warn' },
@@ -10,20 +11,27 @@ export const FLAGS = {
   chep_tin_khach: 'Chép tin khách',
   spam_link: 'Spam link',
   sai_group: 'Sai group',
+  van_mau: 'Văn mẫu lặp lại',
 }
 
 export const interactions = (r) => (r?.reactions ?? 0) + (r?.comments ?? 0) + (r?.shares ?? 0)
-export const isBad = (r) => r && (r.status === 'removed' || r.rule_flags?.length > 0)
+export const isBad = (r) => r && (r.status === 'removed' || r.status === 'hidden' || r.rule_flags?.length > 0)
 
 export function Stars({ score }) {
   if (!score) return null
   return <span className="stars" title={`${score}/5 điểm`}>{'★'.repeat(score)}<span className="dim">{'★'.repeat(5 - score)}</span></span>
 }
 
-export default function Review({ r }) {
-  if (!r) return <div className="review none">Bot chưa chấm bài này.</div>
+export default function Review({ r, kind }) {
+  if (!r) return <div className="review none">Bot chưa chấm {kind === 'comment' ? 'comment' : 'bài'} này.</div>
   const st = STATUS[r.status] || STATUS.unreachable
-  const nums = [r.reactions != null && `${r.reactions} cảm xúc`, r.comments != null && `${r.comments} bình luận`, r.shares != null && `${r.shares} chia sẻ`].filter(Boolean)
+  const c = kind === 'comment'
+  const nums = [
+    r.reactions != null && `${r.reactions} ${c ? 'lượt thích' : 'cảm xúc'}`,
+    r.comments != null && `${r.comments} ${c ? 'trả lời' : 'bình luận'}`,
+    !c && r.shares != null && `${r.shares} chia sẻ`,
+    c && r.asker_replied != null && (r.asker_replied ? 'người hỏi đã phản hồi' : 'người hỏi chưa phản hồi'),
+  ].filter(Boolean)
   return (
     <div className={'review' + (isBad(r) ? ' bad' : '')}>
       <div className="review-h">

@@ -4,7 +4,8 @@ import { vnToday, longDate, timeVN, addDays } from '../lib/date.js'
 import Review from '../components/Review.jsx'
 import { useToast } from '../App.jsx'
 
-export const KIND = { post: 'Bài đăng', comment: 'Comment' }
+export const KIND = { post: 'Bài đăng', comment: 'Comment vào bài người khác' }
+export const KIND_SHORT = { post: 'Bài đăng', comment: 'Comment' }
 
 export default function Today({ me }) {
   const notify = useToast()
@@ -44,7 +45,6 @@ export default function Today({ me }) {
   const checkOf = (rid) => day.checks.find((c) => c.routine_id === rid)
   const doneRoutines = routines.filter((r) => checkOf(r.id)?.done).length
   const doneExtras = day.extras.filter((e) => e.done).length
-  const quota = who.seeding_quota ?? 5
 
   async function toggle(r, patch) {
     const cur = checkOf(r.id)
@@ -103,9 +103,11 @@ export default function Today({ me }) {
         </div>
 
         <div>
-          <Seeding date={date} who={who} quota={quota} day={day} setDay={setDay} groups={groups} ideas={ideas} />
+          <Seeding date={date} who={who} day={day} setDay={setDay} groups={groups} ideas={ideas} />
         </div>
       </div>
+
+      <Targets me={me} who={who} nameOf={nameOf} today={date} onCommented={load} />
 
       <Ideas ideas={ideas} me={me} nameOf={nameOf} reload={load} />
 
@@ -164,36 +166,53 @@ function Extras({ date, who, day, setDay, reload, doneExtras }) {
   )
 }
 
-function Seeding({ date, who, quota, day, setDay, groups, ideas }) {
+function Bar({ label, n, quota }) {
+  const full = quota > 0 && n >= quota
+  const pct = quota > 0 ? Math.min(100, (n / quota) * 100) : n ? 100 : 0
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <span className="sub" style={{ color: 'var(--brown)', fontWeight: 600 }}>{label}</span>
+        <b style={{ color: full ? 'var(--green)' : undefined, fontSize: 14 }}>{n}/{quota}{full ? ' ✓' : ''}</b>
+      </div>
+      <div className={'bar' + (full ? ' full' : '')}><span style={{ width: pct + '%' }} /></div>
+    </div>
+  )
+}
+
+function Seeding({ date, who, day, setDay, groups, ideas }) {
   const notify = useToast()
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState('')
   const [groupId, setGroupId] = useState('')
   const [other, setOther] = useState('')
   const [kind, setKind] = useState('post')
+  const [question, setQuestion] = useState('')
   const [ideaId, setIdeaId] = useState('')
   const [err, setErr] = useState('')
-  const n = day.posts.length
-  const full = quota > 0 && n >= quota
-  const pct = quota > 0 ? Math.min(100, (n / quota) * 100) : n ? 100 : 0
+  const nPost = day.posts.filter((p) => p.kind === 'post').length
+  const nCmt = day.posts.filter((p) => p.kind === 'comment').length
+  const qPost = who.seeding_quota ?? 0
+  const qCmt = who.comment_quota ?? 0
+  const full = nPost >= qPost && nCmt >= qCmt
   const myIdeas = ideas.filter((i) => i.taken_by === who.id || i.assigned_to === who.id)
 
   async function save(e) {
     e.preventDefault()
     setErr('')
     const u = url.trim()
-    if (!/^https?:\/\/\S+$/i.test(u)) return setErr('Dán link bài/comment (bắt đầu bằng https://).')
+    if (!/^https?:\/\/\S+$/i.test(u)) return setErr(kind === 'comment' ? 'Dán link comment (hoặc link bài gốc), bắt đầu bằng https://' : 'Dán link bài đăng (bắt đầu bằng https://).')
     const g = groups.find((x) => x.id === groupId)
     if (!g && !other.trim()) return setErr('Chọn group (hoặc ghi tên group khác).')
     try {
-      const row = await api.addPost({ date, member_id: who.id, url: u, group_id: g?.id ?? null, group_name: g?.name ?? other.trim(), kind, idea_id: ideaId || null })
+      const row = await api.addPost({ date, member_id: who.id, url: u, group_id: g?.id ?? null, group_name: g?.name ?? other.trim(), kind, question: kind === 'comment' ? question.trim() || null : null, idea_id: ideaId || null })
       setDay((d) => ({ ...d, posts: [...d.posts, row] }))
-      setUrl(''); setOther(''); setIdeaId(''); setOpen(false)
-      notify(n + 1 === quota ? 'Đủ chỉ tiêu seeding hôm nay 🎉' : 'Đã ghi bài seeding')
+      setUrl(''); setOther(''); setIdeaId(''); setQuestion(''); setOpen(false)
+      notify('Đã ghi ' + (kind === 'comment' ? 'comment' : 'bài đăng'))
     } catch (x) { setErr(x.message) }
   }
   async function remove(p) {
-    if (!confirm('Xoá bài seeding này?')) return
+    if (!confirm('Xoá dòng seeding này?')) return
     setDay((d) => ({ ...d, posts: d.posts.filter((x) => x.id !== p.id) }))
     try { await api.deletePost(p.id) } catch (x) { notify(x.message, true) }
   }
@@ -202,13 +221,13 @@ function Seeding({ date, who, quota, day, setDay, groups, ideas }) {
     <section className="card">
       <div className="card-h">
         <h2>Seeding</h2>
-        <span className="count" style={{ color: full ? 'var(--green)' : undefined }}>{n}/{quota} bài</span>
+        <span className="count" style={{ color: full ? 'var(--green)' : undefined }}>{full ? 'Đủ chỉ tiêu ✓' : ''}</span>
       </div>
-      <div className={'bar' + (full ? ' full' : '')}><span style={{ width: pct + '%' }} /></div>
-      <div className="sub">{full ? 'Đủ chỉ tiêu hôm nay ✓' : `Còn ${Math.max(0, quota - n)} bài nữa là đủ chỉ tiêu`}</div>
+      <Bar label="Bài đăng" n={nPost} quota={qPost} />
+      <Bar label="Comment vào bài người khác" n={nCmt} quota={qCmt} />
 
       <div className="rule">
-        Đăng công khai từ nick/trang Kỳ Tích (vd: “Tuần này nhiều bạn hỏi…, mình tổng hợp…”) hoặc trả lời câu hỏi thật trong group. <b>Không đóng vai học viên. Không chép nguyên văn tin nhắn Zalo của khách.</b>
+        Đăng công khai từ nick/trang Kỳ Tích (vd: “Tuần này nhiều bạn hỏi…, mình tổng hợp…”) hoặc trả lời câu hỏi thật trong group. <b>Không đóng vai học viên. Không chép nguyên văn tin nhắn Zalo của khách. Không dán link trơ trọi hay văn mẫu lặp lại.</b>
       </div>
 
       {!open ? (
@@ -216,9 +235,22 @@ function Seeding({ date, who, quota, day, setDay, groups, ideas }) {
       ) : (
         <form className="form-box" onSubmit={save}>
           <div className="field">
-            <label>Link bài / comment <span className="req">*</span></label>
-            <input className="input" type="url" inputMode="url" placeholder="https://www.facebook.com/groups/…" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
+            <label>Loại</label>
+            <div className="seg">
+              {Object.entries(KIND).map(([k, v]) => <button type="button" key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{v}</button>)}
+            </div>
           </div>
+          <div className="field">
+            <label>{kind === 'comment' ? 'Link comment' : 'Link bài đăng'} <span className="req">*</span></label>
+            <input className="input" type="url" inputMode="url" placeholder="https://www.facebook.com/groups/…" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
+            {kind === 'comment' && <div className="mini">Bấm vào giờ đăng của comment để lấy link. Không lấy được thì dán link bài gốc.</div>}
+          </div>
+          {kind === 'comment' && (
+            <div className="field">
+              <label>Bài gốc hỏi gì (tuỳ chọn)</label>
+              <input className="input" placeholder="1 dòng, tự viết lại, không ghi tên người đăng" value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={200} />
+            </div>
+          )}
           <div className="field">
             <label>Group <span className="req">*</span></label>
             <select className="input" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
@@ -228,23 +260,19 @@ function Seeding({ date, who, quota, day, setDay, groups, ideas }) {
             </select>
             {groupId === '__other' && <input className="input" style={{ marginTop: 6 }} placeholder="Tên group" value={other} onChange={(e) => setOther(e.target.value)} />}
           </div>
-          <div className="field">
-            <label>Loại</label>
-            <div className="seg">
-              {Object.entries(KIND).map(([k, v]) => <button type="button" key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{v}</button>)}
+          {kind === 'post' && (
+            <div className="field">
+              <label>Lấy từ gợi ý nào (nếu có)</label>
+              <select className="input" value={ideaId} onChange={(e) => setIdeaId(e.target.value)}>
+                <option value="">— Không —</option>
+                {(myIdeas.length ? myIdeas : ideas).map((i) => <option key={i.id} value={i.id}>{i.topic}</option>)}
+              </select>
             </div>
-          </div>
-          <div className="field">
-            <label>Lấy từ gợi ý nào (nếu có)</label>
-            <select className="input" value={ideaId} onChange={(e) => setIdeaId(e.target.value)}>
-              <option value="">— Không —</option>
-              {(myIdeas.length ? myIdeas : ideas).map((i) => <option key={i.id} value={i.id}>{i.topic}</option>)}
-            </select>
-          </div>
+          )}
           {err && <div className="err">{err}</div>}
           <div className="row" style={{ marginTop: 8 }}>
             <button type="button" className="btn ghost" onClick={() => { setOpen(false); setErr('') }}>Huỷ</button>
-            <button className="btn" style={{ flex: 1 }}>Lưu bài</button>
+            <button className="btn" style={{ flex: 1 }}>Lưu</button>
           </div>
         </form>
       )}
@@ -256,11 +284,84 @@ function Seeding({ date, who, quota, day, setDay, groups, ideas }) {
             <b>{i + 1}.</b>
             <div style={{ flex: 1, minWidth: 0 }}>
               <a href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
-              <div className="meta"><span className={'pill' + (p.kind === 'comment' ? ' c' : '')}>{KIND[p.kind]}</span> {p.group_name} · {p.created_at ? timeVN(p.created_at) : ''}</div>
+              <div className="meta"><span className={'pill' + (p.kind === 'comment' ? ' c' : '')}>{KIND_SHORT[p.kind]}</span> {p.group_name} · {p.created_at ? timeVN(p.created_at) : ''}</div>
+              {p.question && <div className="meta">Bài gốc: {p.question}</div>}
             </div>
             <button className="x" aria-label="Xoá" onClick={() => remove(p)}>×</button>
           </div>
         ))}
+      </div>
+    </section>
+  )
+}
+
+const T_STATUS = { new: 'Mới', taken: 'Đã nhận', commented: 'Đã comment', skipped: 'Bỏ qua' }
+
+function Targets({ me, who, nameOf, today, onCommented }) {
+  const notify = useToast()
+  const [list, setList] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const [linkFor, setLinkFor] = useState(null)
+  const [link, setLink] = useState('')
+  const load = useCallback(() => api.listTargets(addDays(today, -1), today).then(setList).catch((x) => notify(x.message, true)), [today, notify])
+  useEffect(() => { load() }, [load])
+  if (!list) return null
+  // Bài mới/đang nhận còn trong 24h, và những bài đã xử lý hôm nay
+  const shown = list.filter((t) => t.status === 'new' || t.status === 'taken' || t.date === today)
+  const run = async (id, fn) => {
+    setBusy(id)
+    try { await fn() } catch (x) { notify(x.message, true) }
+    await load(); setBusy(null)
+  }
+  async function done(t) {
+    const u = link.trim()
+    if (!/^https?:\/\/\S+$/i.test(u)) return notify('Dán link comment (bắt đầu bằng https://)', true)
+    await run(t.id, async () => { await api.completeTarget(t.id, u); setLinkFor(null); setLink(''); notify('Đã ghi comment vào seeding'); onCommented() })
+  }
+  const open = shown.filter((t) => t.status === 'new').length
+  return (
+    <section className="card">
+      <div className="card-h"><h2>Cơ hội seeding</h2><span className="count">{open} bài chưa ai nhận</span></div>
+      <p className="mini" style={{ marginTop: 0 }}>Bài của người khác trong group bot tìm lúc 17h, đáng vào comment trả lời. Nhận trước khi comment để không trùng người.</p>
+      {shown.length === 0 && <p className="empty">Chưa có cơ hội nào. Bot sẽ tìm lúc 17h.</p>}
+      <div className="ideas">
+        {shown.map((t) => {
+          const mine = t.taken_by === me.id
+          const cls = t.status === 'commented' ? ' mine' : t.status === 'skipped' || (t.taken_by && !mine) ? ' taken' : ''
+          return (
+            <article key={t.id} className={'idea' + cls}>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="sub">{t.group_name}</span>
+                <span className={'tag ' + (t.status === 'commented' ? 'ok' : t.status === 'new' ? '' : 'warn')}>{T_STATUS[t.status]}</span>
+              </div>
+              <div className="topic">{t.question}</div>
+              {t.angle && <div className="kv"><b>Góc trả lời:</b> {t.angle}</div>}
+              {t.assigned_to && <div className="kv"><b>Giao cho:</b> {nameOf[t.assigned_to] || '—'}</div>}
+              <a href={t.url} target="_blank" rel="noreferrer" className="kv">Mở bài gốc ↗</a>
+              <div className="foot">
+                {t.status === 'new' && <>
+                  <button className="btn sm" disabled={busy === t.id} onClick={() => run(t.id, () => api.takeTarget(t.id))}>Mình nhận</button>
+                  <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'))}>Bỏ qua</button>
+                </>}
+                {t.status === 'taken' && mine && linkFor !== t.id && <>
+                  <button className="btn sm" onClick={() => { setLinkFor(t.id); setLink('') }}>Đã comment</button>
+                  <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'new'))}>Trả lại</button>
+                  <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'))}>Bỏ qua</button>
+                </>}
+                {t.status === 'taken' && !mine && <span className="sub">{nameOf[t.taken_by] || 'Người khác'} đã nhận</span>}
+                {t.status === 'commented' && <span className="ok">✓ {t.taken_by === me.id ? 'Bạn' : nameOf[t.taken_by]} đã comment</span>}
+                {t.status === 'skipped' && <span className="sub">Đã bỏ qua</span>}
+              </div>
+              {linkFor === t.id && (
+                <div className="row" style={{ marginTop: 6 }}>
+                  <input className="input" type="url" placeholder="Link comment của bạn" value={link} onChange={(e) => setLink(e.target.value)} autoFocus />
+                  <button className="btn sm" disabled={busy === t.id} onClick={() => done(t)}>Lưu</button>
+                  <button className="x" onClick={() => setLinkFor(null)} aria-label="Huỷ">×</button>
+                </div>
+              )}
+            </article>
+          )
+        })}
       </div>
     </section>
   )
@@ -355,16 +456,21 @@ function YesterdayFeedback({ who, today }) {
         {avg && <span className="count">★ {avg}/5</span>}
       </div>
       {data.fb ? <p style={{ margin: '0 0 6px', whiteSpace: 'pre-wrap' }}>{data.fb.text}</p> : <p className="empty">Bot chưa chấm bài hôm qua (thường xong lúc 8h sáng).</p>}
-      {data.posts.map((p, i) => (
-        <div key={p.id} className="post">
-          <b>{i + 1}.</b>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <a href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
-            <div className="meta"><span className={'pill' + (p.kind === 'comment' ? ' c' : '')}>{KIND[p.kind]}</span> {p.group_name}</div>
-            <Review r={reviewOf(p.id)} />
+      {data.posts.length > 0 && (
+        <details className="more">
+          <summary>Xem góp ý từng bài ({data.posts.length})</summary>
+        {data.posts.map((p, i) => (
+          <div key={p.id} className="post">
+            <b>{i + 1}.</b>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <a href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
+              <div className="meta"><span className={'pill' + (p.kind === 'comment' ? ' c' : '')}>{KIND_SHORT[p.kind]}</span> {p.group_name}{p.question ? ' · Bài gốc: ' + p.question : ''}</div>
+              <Review r={reviewOf(p.id)} kind={p.kind} />
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+        </details>
+      )}
     </section>
   )
 }

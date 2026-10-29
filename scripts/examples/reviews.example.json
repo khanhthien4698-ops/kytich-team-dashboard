@@ -23,11 +23,32 @@
       "good": null,
       "improve": "Bài bị admin group gỡ, có thể do để link ngay câu đầu.",
       "suggestion": "Đăng lại không kèm link, để link ở comment khi có người hỏi.",
-      "rule_flags": ["spam_link"]
+      "rule_flags": [
+        "spam_link"
+      ]
+    },
+    {
+      "post_id": "uuid-một-comment",
+      "status": "live",
+      "reactions": 3,
+      "comments": 1,
+      "shares": null,
+      "asker_replied": true,
+      "score": 4,
+      "good": "Trả lời đúng câu hỏi về thang điểm, giọng tự nhiên.",
+      "improve": "Hơi dài so với một comment.",
+      "suggestion": "Rút còn 3 câu, kết bằng câu hỏi lại người hỏi đang yếu phần nào.",
+      "rule_flags": []
     }
   ],
   "feedback": [
-    { "member": "Thành viên 1", "text": "Hôm qua 5/5 bài còn sống, điểm TB 3,8. Bài Speaking Part 4 hút nhất. Thử viết câu mở ngắn hơn ở các comment." },
-    { "member": "Thành viên 2", "text": "Hôm qua 3/5 bài, 1 bài bị gỡ vì để link đầu bài. Lần sau để link ở comment nhé." }
+    {
+      "member": "Thành viên 1",
+      "text": "Hôm qua 5/5 bài còn sống, điểm TB 3,8. Bài Speaking Part 4 hút nhất. Thử viết câu mở ngắn hơn ở các comment."
+    },
+    {
+      "member": "Thành viên 2",
+      "text": "Hôm qua 3/5 bài, 1 bài bị gỡ vì để link đầu bài. Lần sau để link ở comment nhé."
+    }
   ]
 }

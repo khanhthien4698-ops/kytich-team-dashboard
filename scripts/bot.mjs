@@ -7,8 +7,9 @@
 //   node scripts/bot.mjs report --text "..." [--member "Thành viên 1"] [--date YYYY-MM-DD]
 //   node scripts/bot.mjs report --file report.json   # [{ "member": null|"Tên", "text": "..." }, ...]
 //   node scripts/bot.mjs ideas --file ideas.json     # [{ "topic","question","angle","gift_doc","assigned_to":"Tên" }, ...]
-//   node scripts/bot.mjs to-review [YYYY-MM-DD] [--all]  # JSON các bài seeding hôm qua chưa chấm (--all: cả bài đã chấm)
+//   node scripts/bot.mjs to-review [YYYY-MM-DD] [--kind post|comment] [--all]  # bài/comment hôm qua chưa chấm
 //   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
+//   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
 //
 // Cấu hình: đọc VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_LOGIN_DOMAIN từ .env.local (hoặc biến môi trường).
 // BOT_EMAIL mặc định bot@<domain>. Keychain service: kytich-dashboard-bot (account = BOT_EMAIL).
@@ -65,7 +66,7 @@ function args(argv) {
 async function main() {
   const a = args(process.argv.slice(2))
   const cmd = a._[0]
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 14).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 15).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -104,7 +105,9 @@ async function main() {
       return {
         name: m.name,
         routines: { done: done.length + ex.filter((e) => e.done).length, total: rs.length + ex.length, missing: rs.filter((r) => !done.includes(r)).map((r) => r.title) },
-        seeding: { count: today.length, quota: m.seeding_quota, links: today.map((x) => ({ url: x.url, group: x.group_name, kind: x.kind })) },
+        posts: { count: today.filter((x) => x.kind === 'post').length, quota: m.seeding_quota },
+        comments: { count: today.filter((x) => x.kind === 'comment').length, quota: m.comment_quota ?? 0 },
+        links: today.map((x) => ({ url: x.url, group: x.group_name, kind: x.kind, question: x.question || null })),
         seeding_avg_7d: Math.round((p.length / 7) * 10) / 10,
         day_note: notes.find((n) => n.member_id === m.id && n.date === day)?.note || null,
       }
@@ -137,7 +140,12 @@ async function main() {
     console.log(`OK: đã thêm ${rows.length} thẻ gợi ý cho ngày ${date}.`)
   } else if (cmd === 'to-review') {
     const day = a._[1] || addDays(vnToday(), -1)
-    const posts = await q(sb.from('seeding_posts').select('*').eq('date', day).order('created_at'))
+    let pq = sb.from('seeding_posts').select('*').eq('date', day)
+    if (a.kind) {
+      if (!['post', 'comment'].includes(a.kind)) die('--kind phải là post hoặc comment')
+      pq = pq.eq('kind', a.kind)
+    }
+    const posts = await q(pq.order('created_at'))
     const ids = posts.map((p) => p.id)
     const done = ids.length ? await q(sb.from('seeding_reviews').select('post_id').in('post_id', ids)) : []
     const doneSet = new Set(done.map((r) => r.post_id))
@@ -146,7 +154,7 @@ async function main() {
     const nameOf = Object.fromEntries(members.map((m) => [m.id, m.name]))
     const out = posts.filter((p) => a.all || !doneSet.has(p.id)).map((p) => ({
       post_id: p.id, member: nameOf[p.member_id], date: p.date, posted_at: p.created_at, url: p.url,
-      group: p.group_name, kind: p.kind, idea_topic: ideas.find((i) => i.id === p.idea_id)?.topic || null,
+      group: p.group_name, kind: p.kind, question: p.question || null, idea_topic: ideas.find((i) => i.id === p.idea_id)?.topic || null,
       already_reviewed: doneSet.has(p.id),
     }))
     console.log(JSON.stringify({ date: day, total_posts: posts.length, to_review: out.length, posts: out }, null, 2))
@@ -154,8 +162,8 @@ async function main() {
     if (!a.file) die('Cần --file reviews.json')
     const input = JSON.parse(readFileSync(a.file, 'utf8'))
     const date = input.date || addDays(vnToday(), -1)
-    const STATUS = ['live', 'removed', 'pending', 'unreachable']
-    const FLAGS = ['dong_vai_hoc_vien', 'chep_tin_khach', 'spam_link', 'sai_group']
+    const STATUS = ['live', 'hidden', 'removed', 'pending', 'unreachable']
+    const FLAGS = ['dong_vai_hoc_vien', 'chep_tin_khach', 'spam_link', 'sai_group', 'van_mau']
     const int = (v, k) => {
       if (v === null || v === undefined || v === '') return null
       const n = Number(v)
@@ -173,6 +181,7 @@ async function main() {
       return {
         post_id: r.post_id, checked_at: new Date().toISOString(), status: r.status,
         reactions: int(r.reactions, 'reactions'), comments: int(r.comments, 'comments'), shares: int(r.shares, 'shares'),
+        asker_replied: typeof r.asker_replied === 'boolean' ? r.asker_replied : null,
         score, good: r.good || null, improve: r.improve || null, suggestion: r.suggestion || null, rule_flags: flags,
       }
     })
@@ -183,6 +192,19 @@ async function main() {
     if (reviews.length) await q(sb.from('seeding_reviews').upsert(reviews, { onConflict: 'post_id' }))
     if (feedback.length) await q(sb.from('member_feedback').upsert(feedback, { onConflict: 'date,member_id' }))
     console.log(`OK: đã ghi ${reviews.length} review, ${feedback.length} nhận xét tổng (ngày ${date}).`)
+  } else if (cmd === 'targets') {
+    if (!a.file) die('Cần --file targets.json')
+    const items = JSON.parse(readFileSync(a.file, 'utf8'))
+    const groups = await q(sb.from('seed_groups').select('id,name'))
+    const rows = items.map((t) => {
+      if (!/^https?:\/\//i.test(t.url || '')) die('Mỗi cơ hội cần "url" bắt đầu bằng https://')
+      if (!t.question) die('Mỗi cơ hội cần "question" (tóm tắt câu hỏi, đã viết lại)')
+      const g = groups.find((x) => x.name.toLowerCase() === String(t.group || '').toLowerCase())
+      return { date: t.date || vnToday(), url: t.url, group_id: g?.id ?? null, group_name: g?.name ?? t.group ?? null, question: t.question, angle: t.angle || null, assigned_to: byName(t.assigned_to) }
+    })
+    // Bài đã có (trùng url) thì giữ nguyên, không reset trạng thái người đã nhận
+    const added = await q(sb.from('seed_targets').upsert(rows, { onConflict: 'url', ignoreDuplicates: true }).select('id'))
+    console.log(`OK: thêm ${added.length} cơ hội mới (${rows.length - added.length} bài đã có, bỏ qua).`)
   } else {
     die('Lệnh không hợp lệ: ' + cmd + ' (xem: node scripts/bot.mjs help)')
   }

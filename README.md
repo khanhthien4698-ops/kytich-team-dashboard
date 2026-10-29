@@ -122,31 +122,54 @@ npm run bot -- ideas --file ideas.json                 # xem scripts/examples/id
 - Chạy lại `report` cùng ngày sẽ ghi đè báo cáo cũ của ngày đó.
 - Câu hỏi trong thẻ gợi ý phải **viết lại**, bỏ hết tên/SĐT/thông tin khách.
 
-## Bot chấm bài seeding (chạy mỗi sáng)
+## Seeding: bài đăng + comment, bot chấm, cơ hội seeding
 Cần dán thêm `supabase/002_seeding_review.sql` vào SQL Editor (sau file 001).
 
-Quy trình cho lịch tự động:
-1. `npm run bot -- to-review` → JSON các bài **hôm qua** chưa chấm (`post_id`, người đăng, link, group, loại, chủ đề gợi ý).
-2. Dùng Claude in Chrome mở từng link, **CHỈ ĐỌC**: không like, không comment, không chia sẻ, không đăng gì lên Facebook.
-3. Chấm theo tiêu chí dưới, viết vào 1 file JSON theo mẫu `scripts/examples/reviews.example.json`.
-4. `npm run bot -- reviews --file reviews.json` → ghi review từng bài + nhận xét tổng từng người. Chạy lại thì ghi đè.
+Seeding gồm 2 loại, chỉ tiêu riêng cho từng người ở **Cài đặt** (mặc định 2 bài + 5 comment/ngày cho người mới; người đã có giữ chỉ tiêu bài cũ và được 5 comment):
+- **Bài đăng**: link bài.
+- **Comment vào bài người khác**: link tới comment (bấm vào giờ đăng của comment để lấy link; không lấy được thì dán link bài gốc), kèm ô tuỳ chọn "bài gốc hỏi gì" (1 dòng, tự viết lại, không ghi tên người đăng).
 
-Kết quả hiện ở: "Hôm nay của tôi → Góp ý hôm qua" (mỗi bạn chỉ thấy của mình), ô Bảng tổng (★ điểm TB, ⚠ số bài bị gỡ/vi phạm), tab **Hiệu quả** (7/30 ngày theo người, theo group, top 5 bài).
+Bảng tổng ghi mỗi ô "Việc x/y · Bài a/b · Cmt c/d", ★ điểm bot chấm TB, ⚠ số bài/comment bị gỡ, bị ẩn hoặc vi phạm.
 
-**Tiêu chí chấm**
+### Lịch 17h: tìm "Cơ hội seeding"
+1. Dùng Claude in Chrome đọc các group trong danh sách, **CHỈ ĐỌC**, tìm bài của người khác trong 24 giờ đáng vào comment: hỏi về Aptis, hỏi chỗ ôn/tài liệu, than khó, hỏi key, hỏi lịch thi… mà Kỳ Tích chưa vào trả lời.
+2. Ghi file JSON theo mẫu `scripts/examples/targets.example.json`: `url`, `group` (đúng tên trong Cài đặt), `question` (tóm tắt câu hỏi, **viết lại**, không tên người đăng), `angle` (góc trả lời gợi ý), `assigned_to` (chia đều các bạn).
+3. `npm run bot -- targets --file targets.json`. Bài trùng link đã có thì bỏ qua, không đổi trạng thái.
+
+Trên web, mục **Cơ hội seeding** ở "Hôm nay của tôi": "Mình nhận" (không 2 người nhận trùng) → comment trên Facebook → "Đã comment" + dán link comment: tự thành 1 dòng seeding loại Comment nối với cơ hội. Có "Trả lại" / "Bỏ qua". Tab **Hiệu quả** đếm số cơ hội tìm được, đã comment, bỏ qua, bỏ lỡ theo người và theo group.
+
+### Lịch 8h: chấm bài + comment hôm qua
+1. `npm run bot -- to-review` → JSON các bài/comment **hôm qua** chưa chấm (`--kind post` hoặc `--kind comment` để lọc).
+2. Claude in Chrome mở từng link, **CHỈ ĐỌC**: không like, không comment, không chia sẻ, không đăng gì lên Facebook.
+3. Chấm theo tiêu chí dưới, viết file theo mẫu `scripts/examples/reviews.example.json`.
+4. `npm run bot -- reviews --file reviews.json` → ghi review + nhận xét tổng từng người. Chạy lại thì ghi đè.
+
+Kết quả hiện ở: "Hôm nay của tôi → Góp ý hôm qua" (mỗi bạn chỉ thấy của mình), ô Bảng tổng, tab **Hiệu quả** (7/30 ngày theo người, theo group, top 5).
+
+**Tiêu chí chấm BÀI ĐĂNG**
 | Trường | Cách điền |
 |---|---|
-| `status` | `live` còn hiện; `removed` bị admin group gỡ / không còn; `pending` đang chờ admin duyệt; `unreachable` không mở được (riêng tư, lỗi mạng, cần đăng nhập) |
-| `reactions`, `comments`, `shares` | Số đếm được lúc mở (khoảng 24 giờ sau khi đăng). Không thấy thì để `null` |
-| `score` 1–5 | 5: trả lời đúng câu hỏi thật, có giá trị rõ, câu mở hút, tương tác tốt. 3: ổn nhưng chung chung hoặc tương tác thấp. 1: bị gỡ hoặc vi phạm quy tắc |
-| `good` | 1 câu: điểm làm tốt (câu mở, đúng trọng tâm, có ví dụ, có tài liệu tặng…) |
-| `improve` | 1 câu: điều cần sửa |
-| `suggestion` | 1–2 câu cụ thể: câu mở viết lại, hoặc ý cho bài tiếp theo |
-| `rule_flags` | `dong_vai_hoc_vien` (giả làm học viên), `chep_tin_khach` (chép nguyên tin nhắn khách), `spam_link` (link lộ liễu / dồn dập), `sai_group` (không hợp chủ đề group). Không vi phạm thì `[]` |
+| `status` | `live` còn hiện; `removed` bị admin group gỡ / không còn; `pending` đang chờ duyệt; `unreachable` không mở được |
+| `reactions`, `comments`, `shares` | Số đếm lúc mở (khoảng 24 giờ sau khi đăng). Không thấy thì `null` |
+| `score` 1–5 | 5: trả lời đúng câu hỏi thật, có giá trị rõ, câu mở hút, tương tác tốt. 3: ổn nhưng chung chung / tương tác thấp. 1: bị gỡ hoặc vi phạm |
+| `good` / `improve` | Mỗi cái 1 câu: điểm tốt (câu mở, đúng trọng tâm, ví dụ, tài liệu tặng…) và điều cần sửa |
+| `suggestion` | 1–2 câu cụ thể: câu mở viết lại, hoặc ý cho bài sau |
 
-Nhận xét tổng (`feedback`): mỗi bạn 2–3 câu: bao nhiêu bài còn sống, điểm TB, bài tốt nhất, 1 việc nên làm khác hôm nay.
+**Tiêu chí chấm COMMENT** (vào bài người khác)
+| Trường | Cách điền |
+|---|---|
+| `status` | `live` comment còn; `hidden` bị ẩn (admin/người đăng ẩn, chỉ mình thấy); `removed` bị xoá hoặc bài gốc bị gỡ; `unreachable` không mở được |
+| `reactions` | Lượt thích của **chính comment** |
+| `comments` | Số trả lời dưới **chính comment** |
+| `asker_replied` | `true` nếu người hỏi (chủ bài) phản hồi/thả cảm xúc vào comment, `false` nếu không, `null` nếu không xem được |
+| `score` 1–5 | 5: trả lời đúng câu hỏi thật, có ích, tự nhiên, người hỏi phản hồi. 3: đúng nhưng chung chung. 1–2: giống spam (dán link trơ trọi, văn mẫu lặp lại), bị ẩn/xoá, hoặc vi phạm |
+| `good` / `improve` / `suggestion` | Như bài đăng; gợi ý nên là câu trả lời viết lại ngắn gọn hơn / tự nhiên hơn |
 
-**Không** chép tên, ảnh hay thông tin của người khác trong group (người hỏi, người comment) vào review hay nhận xét.
+**`rule_flags`** (dùng cho cả hai; không vi phạm thì `[]`): `dong_vai_hoc_vien` (giả làm học viên), `chep_tin_khach` (chép nguyên tin nhắn khách), `spam_link` (link lộ liễu, dán link trơ trọi), `van_mau` (văn mẫu lặp lại giữa nhiều comment), `sai_group` (không hợp chủ đề group).
+
+Nhận xét tổng (`feedback`): mỗi bạn 2–3 câu: bao nhiêu bài/comment còn sống, điểm TB, cái tốt nhất, 1 việc nên làm khác hôm nay.
+
+**Không** chép tên, ảnh hay thông tin của người khác trong group (người hỏi, người comment) vào review, cơ hội hay nhận xét.
 
 ## Để sau
 - Danh sách khách (CRM): tab "Khách (sắp có)" đã chừa sẵn, sẽ thêm bảng `customers` ở `supabase/002_*.sql`.

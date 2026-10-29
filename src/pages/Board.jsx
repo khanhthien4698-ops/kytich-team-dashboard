@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from '../lib/api.js'
 import { vnToday, addDays, rangeDays, ddmm, weekday, longDate, monthStart, timeVN } from '../lib/date.js'
 import { useToast } from '../App.jsx'
-import { KIND } from './Today.jsx'
+import { KIND_SHORT as KIND } from './Today.jsx'
 import Review, { isBad } from '../components/Review.jsx'
 
 // Màu ô: xanh = đủ việc + đủ seeding; đỏ = không làm gì; vàng = có làm nhưng thiếu
@@ -15,16 +15,18 @@ function score(m, date, data, routines, today) {
   const note = data.notes.find((n) => n.member_id === m.id && n.date === date)
   const x = checks.length + extras.filter((e) => e.done).length
   const y = rIds.size + extras.length
-  const a = posts.length
+  const a = posts.filter((p) => p.kind === 'post').length
   const b = m.seeding_quota
+  const c = posts.filter((p) => p.kind === 'comment').length
+  const d = m.comment_quota ?? 0
   const rv = posts.map((p) => data.reviewOf[p.id]).filter(Boolean)
   const scores = rv.map((r) => r.score).filter(Boolean)
   const avg = scores.length ? scores.reduce((s, v) => s + v, 0) / scores.length : null
   const bad = rv.filter(isBad).length
   let cls = 'y'
-  if (x === 0 && a === 0 && !note) cls = 'r'
-  else if (x >= y && a >= b) cls = 'g'
-  return { cls, x, y, a, b, avg, bad }
+  if (x === 0 && posts.length === 0 && !note) cls = 'r'
+  else if (x >= y && a >= b && c >= d) cls = 'g'
+  return { cls, x, y, a, b, c, d, avg, bad }
 }
 
 export default function Board() {
@@ -99,7 +101,7 @@ export default function Board() {
                       <td key={d}>
                         {s.cls === 'n' ? <div className="cell n">—</div> : (
                           <button className={`cell ${s.cls}${on ? ' sel' : ''}`} onClick={() => setSel(on ? null : { m, d })}>
-                            Việc {s.x}/{s.y}<br />Seed {s.a}/{s.b}
+                            Việc {s.x}/{s.y}<br />Bài {s.a}/{s.b}<br />Cmt {s.c}/{s.d}
                             {(s.avg || s.bad > 0) && <span className="q">{s.avg ? '★' + s.avg.toFixed(1) : ''}{s.bad > 0 ? ' ⚠' + s.bad : ''}</span>}
                           </button>
                         )}
@@ -112,7 +114,7 @@ export default function Board() {
           </table>
         </div>
         <div className="legend">
-          <span><i style={{ background: 'var(--green-soft)', border: '1px solid var(--green)' }} />Đủ việc + đủ seeding</span>
+          <span><i style={{ background: 'var(--green-soft)', border: '1px solid var(--green)' }} />Đủ việc + đủ bài + đủ comment</span>
           <span><i style={{ background: 'var(--yellow-soft)', border: '1px solid var(--yellow)' }} />Có làm, còn thiếu</span>
           <span><i style={{ background: 'var(--red-soft)', border: '1px solid var(--red)' }} />Không làm gì</span>
           <span className="sub">★ điểm bot chấm TB · ⚠ số bài bị gỡ/vi phạm · Bấm ô xem chi tiết</span>
@@ -159,7 +161,7 @@ function Detail({ m, d, data, routines, onClose }) {
           <p style={{ margin: '4px 0' }}>{note?.note || <span className="sub">Chưa bấm “Xong ngày”.</span>}</p>
         </div>
         <div>
-          <b>Seeding {posts.length}/{m.seeding_quota}</b>
+          <b>Bài {posts.filter((p) => p.kind === 'post').length}/{m.seeding_quota} · Comment {posts.filter((p) => p.kind === 'comment').length}/{m.comment_quota ?? 0}</b>
           {posts.length === 0 && <p className="empty">Không có bài nào.</p>}
           {posts.map((p, i) => (
             <div key={p.id} className="post">
@@ -167,7 +169,8 @@ function Detail({ m, d, data, routines, onClose }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <a href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
                 <div className="meta"><span className={'pill' + (p.kind === 'comment' ? ' c' : '')}>{KIND[p.kind]}</span> {p.group_name}{p.created_at ? ' · ' + timeVN(p.created_at) : ''}</div>
-                <Review r={data.reviewOf[p.id]} />
+                {p.question && <div className="meta">Bài gốc: {p.question}</div>}
+                <Review r={data.reviewOf[p.id]} kind={p.kind} />
               </div>
             </div>
           ))}

@@ -109,3 +109,16 @@ export const listFeedback = (from, to) =>
   q(sb.from('member_feedback').select('*').gte('date', from).lte('date', to))
 export const listPostsRange = (from, to) =>
   q(sb.from('seeding_posts').select('*').gte('date', from).lte('date', to))
+
+// ---------- Cơ hội seeding (bài người khác đáng vào comment) ----------
+export const listTargets = (from, to) =>
+  q(sb.from('seed_targets').select('*').gte('date', from).lte('date', to).order('created_at'))
+export async function takeTarget(id) {
+  const ok = await q(sb.rpc('take_target', { p_target: id }))
+  if (!ok) throw new Error('Cơ hội này vừa có người khác nhận rồi.')
+}
+export async function setTargetStatus(id, status) {
+  const ok = await q(sb.rpc('set_target_status', { p_target: id, p_status: status }))
+  if (!ok) throw new Error('Không đổi được trạng thái (có thể người khác đã nhận).')
+}
+export const completeTarget = (id, url) => q(sb.rpc('complete_target', { p_target: id, p_url: url }))

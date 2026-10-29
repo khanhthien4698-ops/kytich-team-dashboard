@@ -156,7 +156,7 @@ table.board { border-collapse: collapse; min-width: 720px; width: 100%; font-siz
 
 /* ---------- Cài đặt ---------- */
 .set-row { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
-@media (min-width: 760px) { .set-row.m { grid-template-columns: 1.2fr 1.6fr .9fr .6fr auto; align-items: center; } .set-row.g { grid-template-columns: 1fr 1.6fr auto; align-items: center; } .set-row.r { grid-template-columns: 1.4fr 1.2fr auto; align-items: center; } }
+@media (min-width: 760px) { .set-row.m { grid-template-columns: 1.1fr 1.5fr .8fr 1.2fr auto; align-items: center; } .set-row.g { grid-template-columns: 1fr 1.6fr auto; align-items: center; } .set-row.r { grid-template-columns: 1.4fr 1.2fr auto; align-items: center; } }
 .set-row.off { opacity: .5; }
 .mini { font-size: 12px; color: var(--muted); }
 .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; }
@@ -194,3 +194,4 @@ table.eff { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 
 .eff th { background: #fff4ee; }
 .top-post { padding: 10px 0; border-top: 1px solid var(--line); }
 .top-post:first-of-type { border-top: none; }
+details.more summary { cursor: pointer; color: var(--red); font-weight: 700; font-size: 14px; padding: 6px 0; }

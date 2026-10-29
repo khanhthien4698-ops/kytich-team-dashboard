@@ -110,13 +110,15 @@ Sau khi có link: Supabase → **Authentication → URL Configuration → Site U
 5. 2 bạn cùng bấm "Mình lấy" 1 thẻ → chỉ 1 người lấy được, người kia báo "vừa có người khác lấy".
 6. Điện thoại (390px): không phải kéo ngang trang (riêng Bảng tổng kéo ngang trong khung bảng).
 
-## Script bot (cho lịch 8h sáng)
+## Script bot (cho lịch tự động)
 ```bash
 npm run bot -- check                                   # thử đăng nhập
 npm run bot -- yesterday                               # JSON dữ liệu hôm qua từng người + TB 7 ngày + chủ đề 3 ngày gần
 npm run bot -- report --file report.json               # [{ "member": null | "Tên", "text": "..." }]
 npm run bot -- report --text "..." --member "Thành viên 2"
 npm run bot -- ideas --file ideas.json                 # xem scripts/examples/ideas.example.json
+npm run bot -- groups                                  # danh sách group đang dùng
+npm run bot -- run-start morning                       # DONE / BUSY / GO (dùng trong lịch tự động)
 ```
 - `member: null` = báo cáo chung (hiện ở Bảng tổng); có tên = nhắc riêng (hiện ở "Hôm nay của tôi" của người đó).
 - Chạy lại `report` cùng ngày sẽ ghi đè báo cáo cũ của ngày đó.
@@ -131,6 +133,15 @@ Seeding gồm 2 loại, chỉ tiêu riêng cho từng người ở **Cài đặt
 
 Bảng tổng ghi mỗi ô "Việc x/y · Bài a/b · Cmt c/d", ★ điểm bot chấm TB, ⚠ số bài/comment bị gỡ, bị ẩn hoặc vi phạm.
 
+### Hai lịch tự động (scheduled task của Claude trên máy Thiện)
+| Lịch | Chạy | Làm gì |
+|---|---|---|
+| `kytich-doi-nhom-10h` | mỗi 10 phút, 10:00–16:50 | chấm bài/comment hôm qua, góp ý, báo cáo đội nhóm, 8–12 thẻ gợi ý |
+| `kytich-doi-nhom-17h` | mỗi 10 phút, 17:00–23:50 | đọc group, ghi "Cơ hội seeding" |
+
+Mỗi lần chạy, bot gọi `npm run bot -- run-start morning|evening` trước: `DONE` (hôm nay xong rồi) hoặc `BUSY` (lần trước đang chạy) thì dừng ngay; `GO` thì làm. Xong gọi `run-done`, lỗi gọi `run-fail` để 10 phút sau thử lại. Nhờ vậy máy bật muộn vẫn chạy đúng 1 lần/ngày. Trạng thái lưu ở `~/Library/Application Support/kytich-bot/` (khoá treo quá 60 phút tự bỏ).
+Lịch chỉ chạy khi app Claude đang mở và máy bật; Chrome phải đang đăng nhập Facebook.
+
 ### Lịch 17h: tìm "Cơ hội seeding"
 1. Dùng Claude in Chrome đọc các group trong danh sách, **CHỈ ĐỌC**, tìm bài của người khác trong 24 giờ đáng vào comment: hỏi về Aptis, hỏi chỗ ôn/tài liệu, than khó, hỏi key, hỏi lịch thi… mà Kỳ Tích chưa vào trả lời.
 2. Ghi file JSON theo mẫu `scripts/examples/targets.example.json`: `url`, `group` (đúng tên trong Cài đặt), `question` (tóm tắt câu hỏi, **viết lại**, không tên người đăng), `angle` (góc trả lời gợi ý), `assigned_to` (chia đều các bạn).
@@ -138,7 +149,7 @@ Bảng tổng ghi mỗi ô "Việc x/y · Bài a/b · Cmt c/d", ★ điểm bot 
 
 Trên web, mục **Cơ hội seeding** ở "Hôm nay của tôi": "Mình nhận" (không 2 người nhận trùng) → comment trên Facebook → "Đã comment" + dán link comment: tự thành 1 dòng seeding loại Comment nối với cơ hội. Có "Trả lại" / "Bỏ qua". Tab **Hiệu quả** đếm số cơ hội tìm được, đã comment, bỏ qua, bỏ lỡ theo người và theo group.
 
-### Lịch 8h: chấm bài + comment hôm qua
+### Lịch 10h: chấm bài + comment hôm qua
 1. `npm run bot -- to-review` → JSON các bài/comment **hôm qua** chưa chấm (`--kind post` hoặc `--kind comment` để lọc).
 2. Claude in Chrome mở từng link, **CHỈ ĐỌC**: không like, không comment, không chia sẻ, không đăng gì lên Facebook.
 3. Chấm theo tiêu chí dưới, viết file theo mẫu `scripts/examples/reviews.example.json`.

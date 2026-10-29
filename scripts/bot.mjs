@@ -10,12 +10,17 @@
 //   node scripts/bot.mjs to-review [YYYY-MM-DD] [--kind post|comment] [--all]  # bài/comment hôm qua chưa chấm
 //   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
+//   node scripts/bot.mjs groups                          # danh sách group Facebook đang dùng (JSON)
+//   node scripts/bot.mjs run-start morning|evening       # in DONE / BUSY / GO (GO = giữ khóa, bắt đầu làm)
+//   node scripts/bot.mjs run-done  morning|evening       # đánh dấu hôm nay đã xong, nhả khóa
+//   node scripts/bot.mjs run-fail  morning|evening       # nhả khóa để lần thử sau (10 phút) chạy lại
 //
 // Cấu hình: đọc VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_LOGIN_DOMAIN từ .env.local (hoặc biến môi trường).
 // BOT_EMAIL mặc định bot@<domain>. Keychain service: kytich-dashboard-bot (account = BOT_EMAIL).
 import { createClient } from '@supabase/supabase-js'
 import { execFileSync } from 'node:child_process'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, writeFileSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -66,7 +71,26 @@ function args(argv) {
 async function main() {
   const a = args(process.argv.slice(2))
   const cmd = a._[0]
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 15).join('\n')); return }
+  // ---- Trạng thái chạy của lịch tự động (lưu trên máy, không cần đăng nhập) ----
+  if (cmd?.startsWith('run-')) {
+    const job = a._[1]
+    if (!['morning', 'evening'].includes(job)) die('Cần morning hoặc evening')
+    const dir = join(homedir(), 'Library', 'Application Support', 'kytich-bot')
+    mkdirSync(dir, { recursive: true })
+    const done = join(dir, `${job}-${vnToday()}.done`)
+    const lock = join(dir, `${job}.lock`)
+    const LOCK_MAX_MIN = 60 // lần chạy treo quá 60 phút thì coi như đã chết, cho chạy lại
+    if (cmd === 'run-start') {
+      if (existsSync(done)) return console.log('DONE')
+      if (existsSync(lock) && (Date.now() - statSync(lock).mtimeMs) / 60000 < LOCK_MAX_MIN) return console.log('BUSY')
+      writeFileSync(lock, new Date().toISOString())
+      return console.log('GO')
+    }
+    if (cmd === 'run-done') { writeFileSync(done, new Date().toISOString()); rmSync(lock, { force: true }); return console.log('OK: đã đánh dấu xong ' + job) }
+    if (cmd === 'run-fail') { rmSync(lock, { force: true }); return console.log('OK: đã nhả khóa ' + job) }
+    die('Lệnh không hợp lệ: ' + cmd)
+  }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 19).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -192,6 +216,9 @@ async function main() {
     if (reviews.length) await q(sb.from('seeding_reviews').upsert(reviews, { onConflict: 'post_id' }))
     if (feedback.length) await q(sb.from('member_feedback').upsert(feedback, { onConflict: 'date,member_id' }))
     console.log(`OK: đã ghi ${reviews.length} review, ${feedback.length} nhận xét tổng (ngày ${date}).`)
+  } else if (cmd === 'groups') {
+    const groups = await q(sb.from('seed_groups').select('name,url').eq('active', true).order('sort_order'))
+    console.log(JSON.stringify(groups, null, 2))
   } else if (cmd === 'targets') {
     if (!a.file) die('Cần --file targets.json')
     const items = JSON.parse(readFileSync(a.file, 'utf8'))

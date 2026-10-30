@@ -1,4 +1,18 @@
 [
-  { "topic": "Speaking", "question": "ad ơi speaking part 4 e toàn bí ý ko nói đủ 2p thì có bị trừ nhiều k ạ", "source": "web", "asked_at": "29/10 21:14", "times": 3 },
-  { "topic": "Gói Pro", "question": "mua goi pro r ma van chua dung dc de thi thu, [...] kiem tra giup e voi", "source": "zalo", "asked_at": "29/10 22:40", "times": 1 }
+  {
+    "topic": "Speaking",
+    "question": "ad ơi speaking part 4 e toàn bí ý ko nói đủ 2p thì có bị trừ nhiều k ạ",
+    "source": "zalo",
+    "asked_at": "29/10 21:14",
+    "times": 3,
+    "answer": "Không bị trừ nhiều đâu em, quan trọng là nói đúng ý và có ví dụ."
+  },
+  {
+    "topic": "Gói Pro",
+    "question": "mua goi pro r ma van chua dung dc de thi thu, [...] kiem tra giup e voi",
+    "source": "zalo",
+    "asked_at": "29/10 22:40",
+    "times": 1,
+    "answer": "Em tải lại trang giúp anh nha, vẫn chưa được thì gửi anh ảnh mục Tài khoản."
+  }
 ]

@@ -379,19 +379,31 @@ table.eff { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 
 .skip-txt { flex: 1; min-width: 0; font-size: 14px; color: var(--brown-2); }
 .skip-txt .sub { font-size: 12px; }
 
-/* ---- Gợi ý bài đăng: bảng dọc ---- */
+/* ---- Gợi ý bài đăng: bảng 4 cột (câu hỏi | câu trả lời | giao cho ai | nhận) ---- */
 .itable { border: 1px solid #f3dccf; border-radius: 16px; overflow: hidden; max-height: 75vh; overflow-y: auto; }
-.irow { display: grid; grid-template-columns: minmax(0, 1fr) 170px 150px; gap: 12px; align-items: center; padding: 12px 14px; border-top: 1px solid #f6e6dc; background: #fff; }
+.irow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 150px 120px; gap: 14px; align-items: start; padding: 12px 14px; border-top: 1px solid #f6e6dc; background: #fff; }
 .irow.ihead { position: sticky; top: 0; z-index: 1; border-top: 0; background: var(--cream); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--brown-2); padding: 9px 14px; }
 .irow:not(.ihead):not(.got) { border-left: 4px solid var(--orange-2); }
-.irow .iq { font-size: 15px; font-weight: 700; line-height: 1.45; color: var(--brown); word-break: break-word; }
-.irow .imeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: #8a6a60; }
+.irow .iq { font-size: 14.5px; font-weight: 700; line-height: 1.45; color: var(--brown); word-break: break-word; }
+.irow .ians { font-size: 14px; line-height: 1.5; color: #5b3a32; word-break: break-word; }
 .irow .iact { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 .irow.got { background: var(--green-soft); border-left: 4px solid #2bb673; }
-.irow.got .iq { color: #7d6a64; font-weight: 600; }
+.irow.got .iq, .irow.got .ians { color: #7d6a64; font-weight: 500; }
 .iwho-got { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; color: #11663a; font-size: 14px; }
-@media (max-width: 640px) {
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.clamp.open { display: block; }
+.linkbtn { background: none; border: 0; padding: 2px 0 0; color: var(--red); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+@media (max-width: 760px) {
   .irow { grid-template-columns: 1fr auto; gap: 8px 10px; }
-  .irow .icontent { grid-column: 1 / -1; }
+  .irow .icell { grid-column: 1 / -1; }
+  .irow .icell::before { content: attr(data-l); display: block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #a07a6c; margin-bottom: 2px; }
   .irow.ihead { display: none; }
 }
+
+/* ---- Bài cần comment: nội dung 2 dòng + ô tích đã comment ---- */
+.tcard .tbody { font-weight: 700; font-size: 15px; line-height: 1.45; color: var(--brown); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.tcard .topen { font-weight: 700; }
+.tick { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; background: var(--green-soft); color: #11663a; font-weight: 800; font-size: 13px; cursor: pointer; }
+.tick input { width: 18px; height: 18px; accent-color: #2bb673; cursor: pointer; }
+.tick.busy { opacity: .6; }
+.next-txt .sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }

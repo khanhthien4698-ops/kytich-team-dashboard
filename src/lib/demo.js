@@ -39,13 +39,13 @@ function seed() {
   }
   extra_tasks.push({ id: uid(), date: today, member_id: staff[0].id, title: 'Soạn bài tổng hợp đề Speaking tuần này', done: false })
   const asks = [
-    ['Speaking', 'ad ơi speaking part 4 e toàn bí ý ko nói đủ 2p thì có bị trừ nhiều k ạ', 'web', '29/10 21:14', 3],
-    ['Gói Pro', 'mua goi pro r ma van chua dung dc de thi thu, [...] kiem tra giup e voi', 'web', '29/10 22:40', 1],
-    ['Lịch thi', 'Cho em hỏi thi aptis ở HN tháng 11 đăng kí ở đâu, bao lâu có điểm ạ', 'zalo', '29/10 19:05', 2],
-    ['Listening', 'sao e nghe đc keyword mà vẫn chọn sai hoài vậy ad', 'zalo', '30/10 07:52', 1],
-    ['Writing', 'writing part 4 email trang trọng mở đầu sao cho đúng ạ, e hay viết dear friend', 'web', '30/10 06:31', 1],
+    ['Speaking', 'ad ơi speaking part 4 e toàn bí ý ko nói đủ 2p thì có bị trừ nhiều k ạ', 'zalo', '29/10 21:14', 3, 'Không bị trừ nhiều đâu em, quan trọng là nói đúng ý và có ví dụ. Em cứ nói theo khung: quan điểm → lý do → ví dụ → kết, tập bấm giờ 2 phút mỗi ngày là quen.'],
+    ['Gói Pro', 'mua goi pro r ma van chua dung dc de thi thu, [...] kiem tra giup e voi', 'zalo', '29/10 22:40', 1, 'Em tải lại trang giúp anh nha, nếu vẫn chưa được thì gửi anh ảnh chụp màn hình mục Tài khoản, anh kiểm tra ngay.'],
+    ['Lịch thi', 'Cho em hỏi thi aptis ở HN tháng 11 đăng kí ở đâu, bao lâu có điểm ạ', 'zalo', '29/10 19:05', 2, 'Ở HN em đăng ký qua Hội đồng Anh hoặc các điểm thi liên kết nhé. Thường 2–5 ngày làm việc là có điểm.'],
+    ['Listening', 'sao e nghe đc keyword mà vẫn chọn sai hoài vậy ad', 'zalo', '30/10 07:52', 1, 'Vì đề hay gài từ phủ định với đổi ý ở cuối câu đó em. Nghe hết câu rồi mới chọn, đừng chọn ngay khi nghe thấy keyword.'],
+    ['Writing', 'writing part 4 email trang trọng mở đầu sao cho đúng ạ, e hay viết dear friend', 'zalo', '30/10 06:31', 1, 'Email trang trọng thì mở bằng Dear Sir/Madam hoặc Dear Mr/Ms + họ nhé em, Dear friend chỉ dùng cho email thân mật thôi.'],
   ]
-  const seed_ideas = asks.map(([topic, question, src, at, n], i) => ({ id: uid(), date: today, topic, question, angle: 'meta:' + JSON.stringify({ src, at, n }), gift_doc: null, assigned_to: null, taken_by: i === 0 ? staff[0].id : i === 1 ? staff[1].id : null, taken_at: null }))
+  const seed_ideas = asks.map(([topic, question, src, at, n, ans], i) => ({ id: uid(), date: today, topic, question, angle: 'meta:' + JSON.stringify({ src, at, n, ans }), gift_doc: null, assigned_to: null, taken_by: i === 0 ? staff[0].id : i === 1 ? staff[1].id : null, taken_at: null }))
   const team_reports = [
     { id: uid(), date: today, member_id: null, text: 'Hôm qua: Thành viên 1 đủ việc 3/3, seeding 5/5. Thành viên 2 việc 2/3, seeding 3/5 (thiếu 2). Thành viên 3 chưa ghi gì.\nTrung bình 7 ngày: 4,1 bài/người/ngày.', created_at: new Date().toISOString() },
     { id: uid(), date: today, member_id: staff[1].id, text: 'Hôm qua bạn làm 2/3 việc, seeding 3/5. Hôm nay nhớ bù 2 bài nhé.', created_at: new Date().toISOString() },
@@ -78,7 +78,7 @@ function seed() {
   const tq = [
     ['Bạn hỏi thi Aptis ESOL cần bao nhiêu điểm Speaking để đạt B1', 'Giải thích thang điểm + mẹo Part 4'],
     ['Bạn than nghe Listening Part 2 toàn chọn sai dù nghe được từ khoá', 'Nói về bẫy từ đồng nghĩa, kèm 1 ví dụ'],
-    ['Bạn hỏi nên tự ôn hay học lớp khi còn 3 tuần', 'Gợi ý lộ trình 3 tuần, không quảng cáo lộ'],
+    ['Mọi người ơi cho em hỏi, em còn 3 tuần nữa là thi Aptis mà mới ôn được Reading với Listening, Speaking với Writing thì gần như chưa đụng tới. Nên tự ôn tiếp hay đăng ký lớp cấp tốc ạ? Ai có kinh nghiệm chỉ em với', 'Gợi ý lộ trình 3 tuần, không quảng cáo lộ'],
     ['Bạn hỏi xin key đề Reading tháng này', 'Chia sẻ dạng bài hay gặp, nhắc không có key chính thức'],
     ['Bạn hỏi Writing Part 4 viết email trang trọng mở đầu thế nào', '3 câu mở mẫu + lỗi hay gặp'],
   ]

@@ -90,6 +90,10 @@ export default function Today({ me, hasNav }) {
     setDay((x) => ({ ...x, checks: [...x.checks.filter((c) => c.routine_id !== r.id), row] }))
     try { await api.saveCheck(row) } catch (x) { notify(x.message, true); load() }
   }
+  async function doneTarget(t) {
+    try { await api.completeTarget(t.id, t.url); notify('Đã ghi: bạn đã comment vào bài này 🎉') } catch (x) { notify(x.message, true) }
+    load()
+  }
   async function take(t) {
     try { await api.takeTarget(t.id); notify('Đã nhận. Comment xong nhớ bấm "Đã comment" nhé!') } catch (x) { notify(x.message, true) }
     load()
@@ -110,7 +114,7 @@ export default function Today({ me, hasNav }) {
   const myIdea = ideas.find((i) => i.taken_by === who.id && !day.posts.some((p) => p.idea_id === i.id))
   const freeIdeas = ideas.filter((i) => !i.taken_by)
   if (yday.fb && !fbSeen) next.push({ ic: '💬', t: 'Đọc góp ý của bot cho bài hôm qua', s: yday.fb.text.slice(0, 70) + (yday.fb.text.length > 70 ? '…' : ''), btn: 'Đọc', go: () => { store.set(fbKey, '1'); scrollToId('s1'); load() } })
-  if (myTaken.length) next.push({ ic: '✍️', t: `Bạn đang giữ ${myTaken.length} bài chưa comment`, s: myTaken[0].question, btn: 'Đã comment', go: () => setQuick({ kind: 'comment', target: myTaken[0] }) })
+  if (myTaken.length) next.push({ ic: '✍️', t: `Bạn đang giữ ${myTaken.length} bài chưa comment`, s: myTaken[0].question, btn: 'Đã comment', go: () => doneTarget(myTaken[0]) })
   else if (nCmt < qCmt && openTargets.length) {
     const t = myOpen[0] || openTargets[0]
     next.push({ ic: '🎯', t: `Nhận 1 bài để comment (còn ${qCmt - nCmt} comment)`, s: t.question, btn: 'Nhận', go: () => take(t) })
@@ -280,17 +284,23 @@ function Feedback({ yday, seen, onSeen }) {
 }
 
 // ---- Bước 2: nhận việc (cơ hội comment + thẻ gợi ý bài đăng) ----
-// Thẻ câu hỏi nguyên văn: nguồn/giờ/số lần lưu ở cột angle dạng "meta:{json}"
+// Chữ dài: cắt còn N dòng, bấm để xem hết
+function Clamp({ text, lines }) {
+  const [open, setOpen] = useState(false)
+  const long = text.length > lines * 60 || text.split('\n').length > lines
+  return (
+    <div>
+      <div className={'clamp' + (open ? ' open' : '')} style={{ WebkitLineClamp: open ? 'unset' : lines }}>{text}</div>
+      {long && <button type="button" className="linkbtn" onClick={() => setOpen((v) => !v)}>{open ? 'Thu gọn' : 'Xem hết'}</button>}
+    </div>
+  )
+}
+
+// Thẻ câu hỏi nguyên văn: nguồn/giờ/số lần/câu trả lời lưu ở cột angle dạng "meta:{json}"
 function ideaMeta(i) {
   if (!i.angle?.startsWith('meta:')) return null
   try { return JSON.parse(i.angle.slice(5)) } catch { return null }
 }
-function metaLine(m) {
-  const src = m.src === 'web' ? '🤖 Web chatbot' : '💬 Zalo'
-  const at = m.at ? (m.at.includes('T') ? timeVN(m.at) : m.at) : ''
-  return [src, at, m.n > 1 ? `hỏi ${m.n} lần` : ''].filter(Boolean).join(' · ')
-}
-
 function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, reload, onComment, onWrite }) {
   const notify = useToast()
   const [busy, setBusy] = useState(null)
@@ -326,23 +336,26 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
             {shownT.map((t) => {
               const cls = t.status === 'commented' ? ' mine' : t.taken_by && !mine(t) ? ' taken' : ''
               return (
-                <article key={t.id} className={'idea' + cls}>
+                <article key={t.id} className={'idea tcard' + cls}>
                   <div className="idea-top"><span className="sub">{t.group_name} · {ddmm(t.date)}</span>{t.status === 'new' && t.created_at > seenAt && <span className="chip new">🔔 Vừa tìm</span>}<span className={'chip ' + (t.status === 'commented' ? 'ok' : t.status === 'new' ? '' : 'warn')}>{T_STATUS[t.status]}</span></div>
-                  <div className="topic">{t.question}</div>
+                  <div className="tbody" title={t.question}>{t.question}</div>
                   {t.angle && <div className="kv"><b>Gợi ý trả lời:</b> {t.angle}</div>}
                   {t.assigned_to && <div className="kv"><b>Giao cho:</b> {t.assigned_to === who.id ? 'bạn' : nameOf[t.assigned_to] || '—'}</div>}
-                  <a href={t.url} target="_blank" rel="noreferrer" className="kv" style={{ fontWeight: 700 }}>Mở bài gốc ↗</a>
+                  <a href={t.url} target="_blank" rel="noreferrer" className="kv topen">Mở bài gốc ↗</a>
                   <div className="foot">
+                    {(t.status === 'new' || (t.status === 'taken' && mine(t))) && (
+                      <label className={'tick' + (busy === t.id ? ' busy' : '')}>
+                        <input type="checkbox" disabled={busy === t.id} onChange={() => run(t.id, () => api.completeTarget(t.id, t.url), 'Đã ghi: bạn đã comment vào bài này 🎉')} />
+                        Đã comment vào bài này
+                      </label>
+                    )}
                     {t.status === 'new' && <>
-                      <button className="btn sm" disabled={busy === t.id} onClick={() => run(t.id, () => api.takeTarget(t.id), 'Đã nhận')}>Mình nhận</button>
+                      <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.takeTarget(t.id), 'Đã nhận')}>Mình nhận</button>
                       <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'), 'Đã chuyển vào mục Đã bỏ qua')}>Bỏ qua</button>
                     </>}
-                    {t.status === 'taken' && mine(t) && <>
-                      <button className="btn sm" onClick={() => onComment(t)}>Đã comment ✓</button>
-                      <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'new'))}>Trả lại</button>
-                    </>}
+                    {t.status === 'taken' && mine(t) && <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'new'))}>Trả lại</button>}
                     {t.status === 'taken' && !mine(t) && <span className="sub">{nameOf[t.taken_by] || 'Người khác'} đã nhận</span>}
-                    {t.status === 'commented' && <span className="ok">✓ {t.taken_by === me.id ? 'Bạn' : nameOf[t.taken_by]} đã comment</span>}
+                    {t.status === 'commented' && <span className="ok">✓ {t.taken_by === me.id ? 'Bạn' : nameOf[t.taken_by]} đã comment vào bài này</span>}
                   </div>
                 </article>
               )
@@ -368,23 +381,17 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
       {tab === 'post' && (
         <>
           {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có thẻ gợi ý. Khoảng 8h–8h30 sáng bot gom câu học viên hỏi thật trên chatbot web và Zalo 24h qua.</div></div>}
-          {ideas.some(ideaMeta) && <p className="mini ask-tip">Đây là câu học viên hỏi <b>nguyên văn</b>, để bạn biết người học hỏi thế nào. Viết bài trả lời từ nick/trang Kỳ Tích, không đăng lại như thể mình là người hỏi.</p>}
+          {ideas.length > 0 && <p className="mini ask-tip">Câu hỏi và câu trả lời <b>nguyên văn</b> trong Zalo. Viết bài từ nick/trang Kỳ Tích, không đăng lại như thể mình là người hỏi.</p>}
           {ideas.length > 0 && (
             <div className="itable">
-              <div className="irow ihead"><span>Nội dung</span><span>Giao cho ai</span><span></span></div>
+              <div className="irow ihead"><span>Câu hỏi</span><span>Câu trả lời</span><span>Giao cho ai</span><span></span></div>
               {[...ideas].sort((a, b) => !!a.taken_by - !!b.taken_by).map((i) => {
                 const m = ideaMeta(i)
+                const ans = m?.ans || (!m && i.angle) || ''
                 return (
                   <div key={i.id} className={'irow' + (i.taken_by ? ' got' : '') + (mine(i) ? ' me' : '')}>
-                    <div className="icontent">
-                      {m ? <>
-                        <div className="iq">“{i.question}”</div>
-                        <div className="imeta"><span className="chip">{i.topic}</span>{metaLine(m)}</div>
-                      </> : <>
-                        <div className="iq">{i.topic}</div>
-                        <div className="imeta">{i.question}{i.angle && ` · Góc viết: ${i.angle}`}</div>
-                      </>}
-                    </div>
+                    <div className="icell iq" data-l="Câu hỏi"><Clamp text={i.question || i.topic} lines={4} /></div>
+                    <div className="icell ians" data-l="Câu trả lời">{ans ? <Clamp text={ans} lines={4} /> : <span className="sub">—</span>}</div>
                     <div className="iwho">
                       {i.taken_by ? <span className="iwho-got">✓ {i.taken_by === who.id ? 'Bạn' : nameOf[i.taken_by] || 'Người khác'}</span>
                         : i.assigned_to ? <span className="sub">{i.assigned_to === who.id ? 'Bạn' : nameOf[i.assigned_to]} (chưa nhận)</span>

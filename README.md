@@ -1,6 +1,6 @@
 # Dashboard đội nhóm Kỳ Tích
 
-Bảng việc chung của team: nhân viên tick việc hằng ngày, ghi bài seeding, nhận thẻ gợi ý nội dung; Thiện xem Bảng tổng 7 ngày và cài đặt. Bot 8h sáng ghi báo cáo + thẻ gợi ý.
+Bảng việc chung của team: nhân viên tick việc hằng ngày, ghi bài seeding, nhận thẻ gợi ý nội dung; Thiện xem Bảng tổng 7 ngày và cài đặt. Bot 10h sáng ghi báo cáo + thẻ gợi ý.
 
 - Frontend: Vite + React (tĩnh), gọi Supabase bằng anon key.
 - DB + đăng nhập: một project Supabase **riêng** (không dính gì tới web học viên aptiskytich.vn).

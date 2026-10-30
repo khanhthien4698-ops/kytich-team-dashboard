@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { demoClient } from './demo.js'
+import { addDays } from './date.js'
 
 export const DEMO = import.meta.env.VITE_DEMO === '1'
 const URL = import.meta.env.VITE_SUPABASE_URL
@@ -113,6 +114,14 @@ export const listPostsRange = (from, to) =>
 // ---------- Cơ hội seeding (bài người khác đáng vào comment) ----------
 export const listTargets = (from, to) =>
   q(sb.from('seed_targets').select('*').gte('date', from).lte('date', to).order('created_at'))
+// Bài cần comment không hết hạn theo ngày: lấy mọi bài còn mở + bài đã comment/bỏ qua 14 ngày gần nhất
+export async function listActiveTargets(today) {
+  const [open, recent] = await Promise.all([
+    q(sb.from('seed_targets').select('*').in('status', ['new', 'taken']).order('created_at', { ascending: false })),
+    q(sb.from('seed_targets').select('*').in('status', ['commented', 'skipped']).gte('date', addDays(today, -14)).order('created_at', { ascending: false })),
+  ])
+  return [...open, ...recent]
+}
 export async function takeTarget(id) {
   const ok = await q(sb.rpc('take_target', { p_target: id }))
   if (!ok) throw new Error('Cơ hội này vừa có người khác nhận rồi.')

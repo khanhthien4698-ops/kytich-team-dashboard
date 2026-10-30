@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as api from '../lib/api.js'
-import { vnToday, addDays, longDate, timeVN } from '../lib/date.js'
+import { vnToday, addDays, longDate, timeVN, ddmm } from '../lib/date.js'
 import { useToast } from '../App.jsx'
 import Review from '../components/Review.jsx'
 import { Mascot, Ring, Sheet, poseFor, greet, store, shortName } from '../components/ui.jsx'
@@ -39,7 +39,7 @@ export default function Today({ me, hasNav }) {
     try {
       const [ms, rs, day, ideas, gs, targets, yday, yrev, fb, hist] = await Promise.all([
         api.listMembers(), api.listRoutines(whoId), api.getDay(whoId, t), api.listIdeas(t), api.listGroups(),
-        api.listTargets(y, t), api.getDay(whoId, y), api.listReviewsSince(y), api.getFeedback(whoId, y),
+        api.listActiveTargets(t), api.getDay(whoId, y), api.listReviewsSince(y), api.getFeedback(whoId, y),
         api.listPostsRange(addDays(t, -14), y),
       ])
       setMembers(ms)
@@ -294,8 +294,14 @@ function metaLine(m) {
 function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, reload, onComment, onWrite }) {
   const notify = useToast()
   const [busy, setBusy] = useState(null)
-  const shownT = targets.filter((t) => t.status === 'new' || t.status === 'taken' || t.date === date)
-  const newT = shownT.filter((t) => t.status === 'new').length
+  // Bài còn mở nằm mãi trong danh sách (không hết hạn theo ngày) tới khi comment xong hoặc bị bỏ qua
+  const openT = targets.filter((t) => t.status === 'new' || t.status === 'taken')
+    .sort((a, b) => (b.status === 'taken' && b.taken_by === who.id) - (a.status === 'taken' && a.taken_by === who.id) || (b.created_at > a.created_at ? 1 : -1))
+  const vnDate = (ts) => ts && new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(ts))
+  const doneT = targets.filter((t) => t.status === 'commented' && (vnDate(t.taken_at) || t.date) === date)
+  const skippedT = targets.filter((t) => t.status === 'skipped')
+  const shownT = [...openT, ...doneT]
+  const newT = openT.filter((t) => t.status === 'new').length
   const freeI = ideas.filter((i) => !i.taken_by).length
   const run = async (id, fn, ok) => {
     setBusy(id)
@@ -303,7 +309,7 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
     await reload(); setBusy(null)
   }
   const mine = (x) => x.taken_by === who.id
-  const done = shownT.every((t) => t.status !== 'new' || t.taken_by) && !ideas.some((i) => !i.taken_by && i.assigned_to === who.id)
+  const done = openT.every((t) => t.taken_by) && !ideas.some((i) => !i.taken_by && i.assigned_to === who.id)
   return (
     <section className="card" id="s2">
       <StepHead no={2} done={done && (shownT.length > 0 || ideas.length > 0)} title="Nhận việc" hint="Bấm “Mình nhận” / “Mình lấy” trước khi làm để không trùng với bạn khác." />
@@ -314,13 +320,14 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
 
       {tab === 'comment' && (
         <>
-          {shownT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot vào group khoảng 3 tiếng một lần (8h, 11h, 14h, 17h, 20h) tìm bài người khác hỏi về Aptis để mình vào trả lời. Có bài mới sẽ hiện thông báo ở đầu trang.</div></div>}
-          <div className="ideas two">
+          {shownT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot vào group khoảng 3 tiếng một lần (8h, 11h, 14h, 17h, 20h) lấy mọi bài mới để mình vào trả lời. Có bài mới sẽ hiện thông báo ở đầu trang.</div></div>}
+          {shownT.length > 0 && <div className="list-count"><b>{newT}</b> bài chưa ai nhận · {openT.length - newT} đang làm · {doneT.length} đã comment hôm nay</div>}
+          <div className="ideas two scroll-list">
             {shownT.map((t) => {
-              const cls = t.status === 'commented' ? ' mine' : t.status === 'skipped' || (t.taken_by && !mine(t)) ? ' taken' : ''
+              const cls = t.status === 'commented' ? ' mine' : t.taken_by && !mine(t) ? ' taken' : ''
               return (
                 <article key={t.id} className={'idea' + cls}>
-                  <div className="idea-top"><span className="sub">{t.group_name}</span>{t.status === 'new' && t.created_at > seenAt && <span className="chip new">🔔 Vừa tìm</span>}<span className={'chip ' + (t.status === 'commented' ? 'ok' : t.status === 'new' ? '' : 'warn')}>{T_STATUS[t.status]}</span></div>
+                  <div className="idea-top"><span className="sub">{t.group_name} · {ddmm(t.date)}</span>{t.status === 'new' && t.created_at > seenAt && <span className="chip new">🔔 Vừa tìm</span>}<span className={'chip ' + (t.status === 'commented' ? 'ok' : t.status === 'new' ? '' : 'warn')}>{T_STATUS[t.status]}</span></div>
                   <div className="topic">{t.question}</div>
                   {t.angle && <div className="kv"><b>Gợi ý trả lời:</b> {t.angle}</div>}
                   {t.assigned_to && <div className="kv"><b>Giao cho:</b> {t.assigned_to === who.id ? 'bạn' : nameOf[t.assigned_to] || '—'}</div>}
@@ -328,7 +335,7 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
                   <div className="foot">
                     {t.status === 'new' && <>
                       <button className="btn sm" disabled={busy === t.id} onClick={() => run(t.id, () => api.takeTarget(t.id), 'Đã nhận')}>Mình nhận</button>
-                      <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'))}>Bỏ qua</button>
+                      <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'), 'Đã chuyển vào mục Đã bỏ qua')}>Bỏ qua</button>
                     </>}
                     {t.status === 'taken' && mine(t) && <>
                       <button className="btn sm" onClick={() => onComment(t)}>Đã comment ✓</button>
@@ -336,12 +343,25 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
                     </>}
                     {t.status === 'taken' && !mine(t) && <span className="sub">{nameOf[t.taken_by] || 'Người khác'} đã nhận</span>}
                     {t.status === 'commented' && <span className="ok">✓ {t.taken_by === me.id ? 'Bạn' : nameOf[t.taken_by]} đã comment</span>}
-                    {t.status === 'skipped' && <span className="sub">Đã bỏ qua</span>}
                   </div>
                 </article>
               )
             })}
           </div>
+          {skippedT.length > 0 && (
+            <details className="more skipped">
+              <summary>Đã bỏ qua ({skippedT.length}) · xem lại</summary>
+              {skippedT.map((t) => (
+                <div key={t.id} className="skip-row">
+                  <div className="skip-txt">
+                    <div>{t.question}</div>
+                    <span className="sub">{t.group_name} · {ddmm(t.date)} · <a href={t.url} target="_blank" rel="noreferrer">Mở bài gốc ↗</a></span>
+                  </div>
+                  <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, async () => { await api.setTargetStatus(t.id, 'new') }, 'Đã đưa lại vào danh sách')}>Đưa lại vào danh sách</button>
+                </div>
+              ))}
+            </details>
+          )}
         </>
       )}
 
@@ -349,30 +369,39 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
         <>
           {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có thẻ gợi ý. Khoảng 8h–8h30 sáng bot gom câu học viên hỏi thật trên chatbot web và Zalo 24h qua.</div></div>}
           {ideas.some(ideaMeta) && <p className="mini ask-tip">Đây là câu học viên hỏi <b>nguyên văn</b>, để bạn biết người học hỏi thế nào. Viết bài trả lời từ nick/trang Kỳ Tích, không đăng lại như thể mình là người hỏi.</p>}
-          <div className="ideas two">
-            {ideas.map((i) => (
-              <article key={i.id} className={'idea' + (mine(i) ? ' mine' : i.taken_by ? ' taken' : '')}>
-                {ideaMeta(i) ? <>
-                  <div className="idea-top"><span className="chip">{i.topic}</span><span className="sub">{metaLine(ideaMeta(i))}</span></div>
-                  <div className="ask">“{i.question}”</div>
-                </> : <>
-                  <div className="topic">{i.topic}</div>
-                  {i.question && <div className="q">“{i.question}”</div>}
-                  {i.angle && <div className="kv"><b>Góc viết:</b> {i.angle}</div>}
-                  {i.gift_doc && <div className="kv"><b>Tặng kèm:</b> {i.gift_doc}</div>}
-                </>}
-                {i.assigned_to && <div className="kv"><b>Giao cho:</b> {i.assigned_to === who.id ? 'bạn' : nameOf[i.assigned_to] || '—'}</div>}
-                <div className="foot">
-                  {!i.taken_by && <button className="btn sm" disabled={busy === i.id} onClick={() => run(i.id, () => api.takeIdea(i.id), 'Đã lấy thẻ')}>Mình lấy</button>}
-                  {mine(i) && <>
-                    <button className="btn sm" onClick={() => onWrite(i)}>Đăng xong, ghi link</button>
-                    <button className="btn sm ghost" disabled={busy === i.id} onClick={() => run(i.id, () => api.releaseIdea(i.id))}>Trả lại</button>
-                  </>}
-                  {i.taken_by && !mine(i) && <span className="sub">{nameOf[i.taken_by] || 'Người khác'} đã lấy</span>}
-                </div>
-              </article>
-            ))}
-          </div>
+          {ideas.length > 0 && (
+            <div className="itable">
+              <div className="irow ihead"><span>Nội dung</span><span>Giao cho ai</span><span></span></div>
+              {[...ideas].sort((a, b) => !!a.taken_by - !!b.taken_by).map((i) => {
+                const m = ideaMeta(i)
+                return (
+                  <div key={i.id} className={'irow' + (i.taken_by ? ' got' : '') + (mine(i) ? ' me' : '')}>
+                    <div className="icontent">
+                      {m ? <>
+                        <div className="iq">“{i.question}”</div>
+                        <div className="imeta"><span className="chip">{i.topic}</span>{metaLine(m)}</div>
+                      </> : <>
+                        <div className="iq">{i.topic}</div>
+                        <div className="imeta">{i.question}{i.angle && ` · Góc viết: ${i.angle}`}</div>
+                      </>}
+                    </div>
+                    <div className="iwho">
+                      {i.taken_by ? <span className="iwho-got">✓ {i.taken_by === who.id ? 'Bạn' : nameOf[i.taken_by] || 'Người khác'}</span>
+                        : i.assigned_to ? <span className="sub">{i.assigned_to === who.id ? 'Bạn' : nameOf[i.assigned_to]} (chưa nhận)</span>
+                        : <span className="sub">Chưa ai nhận</span>}
+                    </div>
+                    <div className="iact">
+                      {!i.taken_by && <button className="btn sm" disabled={busy === i.id} onClick={() => run(i.id, () => api.takeIdea(i.id), 'Đã nhận')}>Nhận</button>}
+                      {mine(i) && <>
+                        <button className="btn sm" onClick={() => onWrite(i)}>Ghi link</button>
+                        <button className="btn sm ghost" disabled={busy === i.id} onClick={() => run(i.id, () => api.releaseIdea(i.id))}>Trả lại</button>
+                      </>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </>
       )}
     </section>

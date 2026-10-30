@@ -156,7 +156,8 @@ export const demoClient = {
     if (fn === 'take_target') { if (!t || t.status !== 'new') return { data: false, error: null }; Object.assign(t, { status: 'taken', taken_by: m.id }); return { data: true, error: null } }
     if (fn === 'set_target_status') {
       const st = arguments[1].p_status
-      if (!t || !['new', 'taken'].includes(t.status) || (t.taken_by && t.taken_by !== m.id && m.role !== 'admin')) return { data: false, error: null }
+      const restore = t?.status === 'skipped' && st === 'new'
+      if (!t || (!restore && (!['new', 'taken'].includes(t.status) || (t.taken_by && t.taken_by !== m.id && m.role !== 'admin')))) return { data: false, error: null }
       Object.assign(t, { status: st, taken_by: st === 'new' ? null : t.taken_by || m.id }); return { data: true, error: null }
     }
     if (fn === 'complete_target') {

@@ -350,3 +350,19 @@ table.eff { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 
 .more-card summary::-webkit-details-marker { display: none; }
 .more-card summary::after { content: '▾'; margin-left: auto; color: var(--muted); }
 .more-card[open] summary { margin-bottom: 8px; }
+
+/* ---- Thông báo bài mới cần seeding (bot quét group ~3 tiếng/lần) ---- */
+.fresh { display: flex; align-items: center; gap: 14px; margin: 16px 0; padding: 14px 18px; border-radius: 20px; background: linear-gradient(120deg, var(--red), var(--orange-2)); color: #fff; box-shadow: var(--shadow-lg); }
+.fresh-bell { font-size: 26px; width: 46px; height: 46px; flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.2); animation: ring 2.4s ease-in-out infinite; }
+.fresh-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fresh-txt b { font-size: 17px; font-weight: 800; }
+.fresh-txt span { font-size: 13px; opacity: .92; }
+.fresh .btn { background: #fff; color: var(--red); box-shadow: none; flex: none; }
+@keyframes ring { 0%, 70%, 100% { transform: rotate(0) } 75% { transform: rotate(-14deg) } 85% { transform: rotate(12deg) } 92% { transform: rotate(-6deg) } }
+.idea-top > .sub { margin-right: auto; }
+.chip.new { background: var(--red); color: #fff; }
+@media (max-width: 560px) {
+  .fresh { flex-wrap: wrap; padding: 12px 14px; gap: 10px; }
+  .fresh-bell { width: 38px; height: 38px; font-size: 20px; }
+  .fresh .btn { width: 100%; }
+}

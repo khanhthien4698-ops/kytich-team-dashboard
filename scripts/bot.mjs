@@ -11,9 +11,11 @@
 //   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
 //   node scripts/bot.mjs groups                          # danh sách group Facebook đang dùng (JSON)
-//   node scripts/bot.mjs run-start morning|evening       # in DONE / BUSY / GO (GO = giữ khóa, bắt đầu làm)
-//   node scripts/bot.mjs run-done  morning|evening       # đánh dấu hôm nay đã xong, nhả khóa
-//   node scripts/bot.mjs run-fail  morning|evening       # nhả khóa để lần thử sau (10 phút) chạy lại
+//   node scripts/bot.mjs run-start morning|evening|scan  # in DONE / BUSY / GO (GO = giữ khóa, bắt đầu làm)
+//   node scripts/bot.mjs run-done  morning|evening|scan  # đánh dấu đã xong (scan: xong khung giờ hiện tại), nhả khóa
+//   node scripts/bot.mjs run-fail  morning|evening|scan  # nhả khóa để lần thử sau (10 phút) chạy lại
+//   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
+//   Mọi lượt dùng chung Facebook nên không chạy chồng nhau. scan in "GO since=<ISO>" = lần đọc group gần nhất.
 //
 // Cấu hình: đọc VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_LOGIN_DOMAIN từ .env.local (hoặc biến môi trường).
 // BOT_EMAIL mặc định bot@<domain>. Keychain service: kytich-dashboard-bot (account = BOT_EMAIL).
@@ -74,23 +76,45 @@ async function main() {
   // ---- Trạng thái chạy của lịch tự động (lưu trên máy, không cần đăng nhập) ----
   if (cmd?.startsWith('run-')) {
     const job = a._[1]
-    if (!['morning', 'evening'].includes(job)) die('Cần morning hoặc evening')
+    if (!['morning', 'evening', 'scan'].includes(job)) die('Cần morning, evening hoặc scan')
     const dir = join(homedir(), 'Library', 'Application Support', 'kytich-bot')
     mkdirSync(dir, { recursive: true })
-    const done = join(dir, `${job}-${vnToday()}.done`)
+    const today = vnToday()
+    const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hourCycle: 'h23' }).format(new Date()))
+    // Khung quét giữa ngày: 8h, 11h, 14h, 20h (17h do lượt evening làm đầy đủ)
+    const slot = job !== 'scan' ? '' : hour >= 20 ? '20' : hour >= 17 ? null : hour >= 14 ? '14' : hour >= 11 ? '11' : hour >= 8 ? '08' : null
+    const done = join(dir, job === 'scan' ? `scan-${today}-${slot}.done` : `${job}-${today}.done`)
     const lock = join(dir, `${job}.lock`)
+    const lastScan = join(dir, 'last-scan.txt') // lần đọc group gần nhất (scan hoặc evening)
     const LOCK_MAX_MIN = 60 // lần chạy treo quá 60 phút thì coi như đã chết, cho chạy lại
+    const fresh = (f) => existsSync(f) && (Date.now() - statSync(f).mtimeMs) / 60000 < LOCK_MAX_MIN
     if (cmd === 'run-start') {
+      if (job === 'scan' && slot === null) return console.log('DONE')
       if (existsSync(done)) return console.log('DONE')
-      if (existsSync(lock) && (Date.now() - statSync(lock).mtimeMs) / 60000 < LOCK_MAX_MIN) return console.log('BUSY')
+      if (fresh(lock)) return console.log('BUSY')
+      // Các lượt đều dùng Facebook trên cùng Chrome: lượt khác đang chạy thì chờ
+      if (['morning', 'evening', 'scan'].some((j) => j !== job && fresh(join(dir, `${j}.lock`)))) return console.log('BUSY')
+      if (job === 'scan' && slot === '20') {
+        // Khung 20h: lượt 17h chưa xong thì để nó làm trước; vừa xong sau 19h thì khỏi quét lại
+        const ev = join(dir, `evening-${today}.done`)
+        if (!existsSync(ev)) return console.log('BUSY')
+        const evHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hourCycle: 'h23' }).format(statSync(ev).mtime))
+        if (evHour >= 19) { writeFileSync(done, 'skip: evening vừa chạy'); return console.log('DONE') }
+      }
       writeFileSync(lock, new Date().toISOString())
+      if (job === 'scan') return console.log('GO since=' + (existsSync(lastScan) ? readFileSync(lastScan, 'utf8').trim() : new Date(Date.now() - 24 * 3600e3).toISOString()))
       return console.log('GO')
     }
-    if (cmd === 'run-done') { writeFileSync(done, new Date().toISOString()); rmSync(lock, { force: true }); return console.log('OK: đã đánh dấu xong ' + job) }
+    if (cmd === 'run-done') {
+      if (job === 'scan' && slot === null) die('Ngoài khung quét')
+      if (job !== 'morning') writeFileSync(lastScan, readFileSync(lock, 'utf8').trim() || new Date().toISOString())
+      writeFileSync(done, new Date().toISOString()); rmSync(lock, { force: true })
+      return console.log('OK: đã đánh dấu xong ' + job + (slot ? ' khung ' + slot + 'h' : ''))
+    }
     if (cmd === 'run-fail') { rmSync(lock, { force: true }); return console.log('OK: đã nhả khóa ' + job) }
     die('Lệnh không hợp lệ: ' + cmd)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 19).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 21).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })

@@ -28,6 +28,8 @@ export default function Today({ me, hasNav }) {
   const [whoId, setWhoId] = useState(me.id)
   const [d, setD] = useState(null)
   const [quick, setQuick] = useState(null) // { kind, ideaId, target }
+  const [pickTab, setPickTab] = useState('comment')
+  const [seenAt, setSeenAt] = useState('')
   const who = members.find((m) => m.id === whoId) || me
 
   const load = useCallback(async () => {
@@ -50,6 +52,13 @@ export default function Today({ me, hasNav }) {
   }, [whoId, notify])
 
   useEffect(() => { load() }, [load])
+  // Bot quét group khoảng 3 tiếng/lần: để tab mở thì cứ 10 phút tự tải lại
+  useEffect(() => {
+    const i = setInterval(() => document.visibilityState === 'visible' && load(), 10 * 60 * 1000)
+    return () => clearInterval(i)
+  }, [load])
+  const seenKey = `kt_tseen_${whoId}`
+  useEffect(() => { setSeenAt(store.get(seenKey) || '') }, [seenKey])
   useEffect(() => {
     const f = () => document.visibilityState === 'visible' && load()
     document.addEventListener('visibilitychange', f)
@@ -91,6 +100,13 @@ export default function Today({ me, hasNav }) {
   const myTaken = targets.filter((t) => t.status === 'taken' && t.taken_by === who.id)
   const openTargets = targets.filter((t) => t.status === 'new')
   const myOpen = openTargets.filter((t) => t.assigned_to === who.id)
+  // Bài bot mới tìm thấy kể từ lần cuối bạn xem
+  const freshT = openTargets.filter((t) => t.created_at > seenAt)
+  const lastFound = freshT.reduce((m, t) => (t.created_at > m ? t.created_at : m), '')
+  const seeFresh = () => {
+    store.set(seenKey, lastFound); setSeenAt(lastFound)
+    setPickTab('comment'); scrollToId('s2')
+  }
   const myIdea = ideas.find((i) => i.taken_by === who.id && !day.posts.some((p) => p.idea_id === i.id))
   const freeIdeas = ideas.filter((i) => !i.taken_by)
   if (yday.fb && !fbSeen) next.push({ ic: '💬', t: 'Đọc góp ý của bot cho bài hôm qua', s: yday.fb.text.slice(0, 70) + (yday.fb.text.length > 70 ? '…' : ''), btn: 'Đọc', go: () => { store.set(fbKey, '1'); scrollToId('s1'); load() } })
@@ -141,6 +157,17 @@ export default function Today({ me, hasNav }) {
         </div>
       </section>
 
+      {freshT.length > 0 && (
+        <section className="fresh">
+          <span className="fresh-bell">🔔</span>
+          <div className="fresh-txt">
+            <b>Có {freshT.length} bài mới cần seeding</b>
+            <span>Bot vừa tìm thấy lúc {timeVN(lastFound)}{freshT.some((t) => t.assigned_to === who.id) ? ` · ${freshT.filter((t) => t.assigned_to === who.id).length} bài giao cho bạn` : ''}. Vào nhận trước khi bài trôi nhé!</span>
+          </div>
+          <button className="btn sm" onClick={seeFresh}>Xem ngay</button>
+        </section>
+      )}
+
       <div className="grid2">
         {/* ---- Việc tiếp theo ---- */}
         <section className="card">
@@ -166,7 +193,7 @@ export default function Today({ me, hasNav }) {
         <Feedback yday={yday} seen={fbSeen} onSeen={() => store.set(fbKey, '1')} />
       </div>
 
-      <PickWork who={who} me={me} targets={targets} ideas={ideas} nameOf={nameOf} date={date} reload={load}
+      <PickWork tab={pickTab} setTab={setPickTab} seenAt={seenAt} who={who} me={me} targets={targets} ideas={ideas} nameOf={nameOf} date={date} reload={load}
         onComment={(t) => setQuick({ kind: 'comment', target: t })} onWrite={(i) => setQuick({ kind: 'post', ideaId: i.id })} />
 
       <div className="grid2">
@@ -253,9 +280,8 @@ function Feedback({ yday, seen, onSeen }) {
 }
 
 // ---- Bước 2: nhận việc (cơ hội comment + thẻ gợi ý bài đăng) ----
-function PickWork({ who, me, targets, ideas, nameOf, date, reload, onComment, onWrite }) {
+function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, reload, onComment, onWrite }) {
   const notify = useToast()
-  const [tab, setTab] = useState('comment')
   const [busy, setBusy] = useState(null)
   const shownT = targets.filter((t) => t.status === 'new' || t.status === 'taken' || t.date === date)
   const newT = shownT.filter((t) => t.status === 'new').length
@@ -277,13 +303,13 @@ function PickWork({ who, me, targets, ideas, nameOf, date, reload, onComment, on
 
       {tab === 'comment' && (
         <>
-          {shownT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot đi tìm lúc 17h các bài người khác hỏi về Aptis trong group để mình vào trả lời.</div></div>}
+          {shownT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot vào group khoảng 3 tiếng một lần (8h, 11h, 14h, 17h, 20h) tìm bài người khác hỏi về Aptis để mình vào trả lời. Có bài mới sẽ hiện thông báo ở đầu trang.</div></div>}
           <div className="ideas two">
             {shownT.map((t) => {
               const cls = t.status === 'commented' ? ' mine' : t.status === 'skipped' || (t.taken_by && !mine(t)) ? ' taken' : ''
               return (
                 <article key={t.id} className={'idea' + cls}>
-                  <div className="idea-top"><span className="sub">{t.group_name}</span><span className={'chip ' + (t.status === 'commented' ? 'ok' : t.status === 'new' ? '' : 'warn')}>{T_STATUS[t.status]}</span></div>
+                  <div className="idea-top"><span className="sub">{t.group_name}</span>{t.status === 'new' && t.created_at > seenAt && <span className="chip new">🔔 Vừa tìm</span>}<span className={'chip ' + (t.status === 'commented' ? 'ok' : t.status === 'new' ? '' : 'warn')}>{T_STATUS[t.status]}</span></div>
                   <div className="topic">{t.question}</div>
                   {t.angle && <div className="kv"><b>Gợi ý trả lời:</b> {t.angle}</div>}
                   {t.assigned_to && <div className="kv"><b>Giao cho:</b> {t.assigned_to === who.id ? 'bạn' : nameOf[t.assigned_to] || '—'}</div>}

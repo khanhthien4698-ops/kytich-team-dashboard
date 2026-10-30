@@ -387,7 +387,7 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
               <div className="irow ihead"><span>Câu hỏi</span><span>Câu trả lời</span><span>Giao cho ai</span><span></span></div>
               {[...ideas].sort((a, b) => !!a.taken_by - !!b.taken_by).map((i) => {
                 const m = ideaMeta(i)
-                const ans = m?.ans || (!m && i.angle) || ''
+                const ans = m?.ans || ''
                 return (
                   <div key={i.id} className={'irow' + (i.taken_by ? ' got' : '') + (mine(i) ? ' me' : '')}>
                     <div className="icell iq" data-l="Câu hỏi"><Clamp text={i.question || i.topic} lines={4} /></div>

@@ -6,10 +6,11 @@
 //   node scripts/bot.mjs yesterday [YYYY-MM-DD] # in JSON dữ liệu hôm qua của từng người + TB 7 ngày + chủ đề 3 ngày gần
 //   node scripts/bot.mjs report --text "..." [--member "Thành viên 1"] [--date YYYY-MM-DD]
 //   node scripts/bot.mjs report --file report.json   # [{ "member": null|"Tên", "text": "..." }, ...]
-//   node scripts/bot.mjs ideas --file ideas.json     # [{ "topic","question","answer","source":"zalo|web","asked_at","times" }, ...] hỏi + đáp nguyên văn
+//   node scripts/bot.mjs ideas --file ideas.json     # [{ "topic","question","answer","source":"zalo|web","asked_at","times" }, ...] hỏi + đáp nguyên văn; thêm --replace để thay thẻ chưa ai nhận
 //   node scripts/bot.mjs to-review [YYYY-MM-DD] [--kind post|comment] [--all]  # bài/comment hôm qua chưa chấm
 //   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
+//   node scripts/bot.mjs target-text --file texts.json  # sửa nội dung bài đã có: [{ "url", "question" }]
 //   node scripts/bot.mjs groups                          # danh sách group Facebook đang dùng (JSON)
 //   node scripts/bot.mjs run-start morning|evening|scan  # in DONE / BUSY / GO (GO = giữ khóa, bắt đầu làm)
 //   node scripts/bot.mjs run-done  morning|evening|scan  # đánh dấu đã xong (scan: xong khung giờ hiện tại), nhả khóa
@@ -114,7 +115,7 @@ async function main() {
     if (cmd === 'run-fail') { rmSync(lock, { force: true }); return console.log('OK: đã nhả khóa ' + job) }
     die('Lệnh không hợp lệ: ' + cmd)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 21).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 22).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -191,8 +192,11 @@ async function main() {
       }
       return { date: it.date || date, topic: it.topic, question: it.question || null, angle: it.angle || null, gift_doc: it.gift_doc || null, assigned_to: byName(it.assigned_to) }
     })
+    // --replace: bỏ các thẻ của ngày đó CHƯA AI NHẬN rồi ghi bộ mới (thẻ đã có người nhận giữ nguyên)
+    let removed = 0
+    if (a.replace) removed = (await q(sb.from('seed_ideas').delete().eq('date', date).is('taken_by', null).select('id'))).length
     await q(sb.from('seed_ideas').insert(rows))
-    console.log(`OK: đã thêm ${rows.length} thẻ gợi ý cho ngày ${date}.`)
+    console.log(`OK: đã thêm ${rows.length} thẻ gợi ý cho ngày ${date}${a.replace ? ` (thay ${removed} thẻ cũ chưa ai nhận)` : ''}.`)
   } else if (cmd === 'to-review') {
     const day = a._[1] || addDays(vnToday(), -1)
     let pq = sb.from('seeding_posts').select('*').eq('date', day)
@@ -256,13 +260,24 @@ async function main() {
     const groups = await q(sb.from('seed_groups').select('id,name'))
     const rows = items.map((t) => {
       if (!/^https?:\/\//i.test(t.url || '')) die('Mỗi cơ hội cần "url" bắt đầu bằng https://')
-      if (!t.question) die('Mỗi cơ hội cần "question" (tóm tắt câu hỏi, đã viết lại)')
+      if (!t.question) die('Mỗi cơ hội cần "question" (nội dung bài nguyên văn, đã che thông tin cá nhân)')
       const g = groups.find((x) => x.name.toLowerCase() === String(t.group || '').toLowerCase())
       return { date: t.date || vnToday(), url: t.url, group_id: g?.id ?? null, group_name: g?.name ?? t.group ?? null, question: t.question, angle: t.angle || null, assigned_to: byName(t.assigned_to) }
     })
     // Bài đã có (trùng url) thì giữ nguyên, không reset trạng thái người đã nhận
     const added = await q(sb.from('seed_targets').upsert(rows, { onConflict: 'url', ignoreDuplicates: true }).select('id'))
     console.log(`OK: thêm ${added.length} cơ hội mới (${rows.length - added.length} bài đã có, bỏ qua).`)
+  } else if (cmd === 'target-text') {
+    // Sửa nội dung bài (cột question) của cơ hội đã có theo url; không đụng trạng thái/người nhận
+    if (!a.file) die('Cần --file texts.json')
+    const items = JSON.parse(readFileSync(a.file, 'utf8'))
+    let n = 0
+    for (const t of items) {
+      if (!t.url || !t.question) die('Mỗi dòng cần "url" và "question"')
+      const r = await q(sb.from('seed_targets').update({ question: t.question }).eq('url', t.url).select('id'))
+      n += r.length
+    }
+    console.log(`OK: đã sửa nội dung ${n}/${items.length} bài.`)
   } else {
     die('Lệnh không hợp lệ: ' + cmd + ' (xem: node scripts/bot.mjs help)')
   }

@@ -38,13 +38,14 @@ function seed() {
     })
   }
   extra_tasks.push({ id: uid(), date: today, member_id: staff[0].id, title: 'Soạn bài tổng hợp đề Speaking tuần này', done: false })
-  const topics = [
-    ['Speaking Part 4 — nói đủ 2 phút', 'Làm sao để nói đủ 2 phút ở Part 4 mà không bị bí ý?', 'Chia sẻ khung 4 bước: quan điểm → lý do → ví dụ → kết', 'File khung Speaking Part 4'],
-    ['Writing Part 4 — email trang trọng', 'Email trang trọng và thân mật khác nhau ở những điểm nào?', 'Bảng so sánh 2 cột, 6 cụm mở/kết', 'Mẫu email Writing Part 4'],
-    ['Lịch thi tháng 11', 'Đăng ký thi Aptis tháng tới ở đâu, mất bao lâu có kết quả?', 'Tổng hợp lịch + mốc trả kết quả', 'Lịch thi tháng 11 (ảnh)'],
-    ['Listening Part 2 — bẫy từ đồng nghĩa', 'Vì sao nghe được từ khoá mà vẫn chọn sai?', 'Giải thích bẫy paraphrase, kèm 3 ví dụ', 'Bộ 20 câu Listening Part 2'],
+  const asks = [
+    ['Speaking', 'ad ơi speaking part 4 e toàn bí ý ko nói đủ 2p thì có bị trừ nhiều k ạ', 'web', '29/10 21:14', 3],
+    ['Gói Pro', 'mua goi pro r ma van chua dung dc de thi thu, [...] kiem tra giup e voi', 'web', '29/10 22:40', 1],
+    ['Lịch thi', 'Cho em hỏi thi aptis ở HN tháng 11 đăng kí ở đâu, bao lâu có điểm ạ', 'zalo', '29/10 19:05', 2],
+    ['Listening', 'sao e nghe đc keyword mà vẫn chọn sai hoài vậy ad', 'zalo', '30/10 07:52', 1],
+    ['Writing', 'writing part 4 email trang trọng mở đầu sao cho đúng ạ, e hay viết dear friend', 'web', '30/10 06:31', 1],
   ]
-  const seed_ideas = topics.map(([topic, question, angle, gift_doc], i) => ({ id: uid(), date: today, topic, question, angle, gift_doc, assigned_to: staff[i % 3].id, taken_by: i === 0 ? staff[0].id : i === 1 ? staff[1].id : null, taken_at: null }))
+  const seed_ideas = asks.map(([topic, question, src, at, n], i) => ({ id: uid(), date: today, topic, question, angle: 'meta:' + JSON.stringify({ src, at, n }), gift_doc: null, assigned_to: null, taken_by: i === 0 ? staff[0].id : i === 1 ? staff[1].id : null, taken_at: null }))
   const team_reports = [
     { id: uid(), date: today, member_id: null, text: 'Hôm qua: Thành viên 1 đủ việc 3/3, seeding 5/5. Thành viên 2 việc 2/3, seeding 3/5 (thiếu 2). Thành viên 3 chưa ghi gì.\nTrung bình 7 ngày: 4,1 bài/người/ngày.', created_at: new Date().toISOString() },
     { id: uid(), date: today, member_id: staff[1].id, text: 'Hôm qua bạn làm 2/3 việc, seeding 3/5. Hôm nay nhớ bù 2 bài nhé.', created_at: new Date().toISOString() },

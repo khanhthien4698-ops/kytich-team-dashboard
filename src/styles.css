@@ -366,3 +366,7 @@ table.eff { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 
   .fresh-bell { width: 38px; height: 38px; font-size: 20px; }
   .fresh .btn { width: 100%; }
 }
+
+/* ---- Thẻ câu học viên hỏi nguyên văn ---- */
+.idea .ask { font-size: 16px; font-weight: 700; line-height: 1.45; color: var(--brown); background: var(--cream); border-left: 4px solid var(--orange); border-radius: 10px; padding: 10px 12px; word-break: break-word; }
+.ask-tip { margin: -4px 0 10px; }

@@ -6,7 +6,7 @@
 //   node scripts/bot.mjs yesterday [YYYY-MM-DD] # in JSON dữ liệu hôm qua của từng người + TB 7 ngày + chủ đề 3 ngày gần
 //   node scripts/bot.mjs report --text "..." [--member "Thành viên 1"] [--date YYYY-MM-DD]
 //   node scripts/bot.mjs report --file report.json   # [{ "member": null|"Tên", "text": "..." }, ...]
-//   node scripts/bot.mjs ideas --file ideas.json     # [{ "topic","question","angle","gift_doc","assigned_to":"Tên" }, ...]
+//   node scripts/bot.mjs ideas --file ideas.json     # [{ "topic","question","source":"web|zalo","asked_at","times" }, ...] câu học viên hỏi nguyên văn
 //   node scripts/bot.mjs to-review [YYYY-MM-DD] [--kind post|comment] [--all]  # bài/comment hôm qua chưa chấm
 //   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
@@ -182,6 +182,13 @@ async function main() {
     const items = JSON.parse(readFileSync(a.file, 'utf8'))
     const rows = items.map((it) => {
       if (!it.topic) die('Mỗi thẻ cần "topic"')
+      // Thẻ dạng mới: câu học viên hỏi nguyên văn + nguồn/giờ/số lần (lưu ở cột angle dạng "meta:{json}", không cần đổi bảng)
+      if (it.source !== undefined) {
+        if (!['web', 'zalo'].includes(it.source)) die('"source" phải là web hoặc zalo')
+        if (!it.question) die('Thẻ câu hỏi cần "question" (nguyên văn, đã che thông tin cá nhân)')
+        const meta = { src: it.source, at: it.asked_at || null, n: Number(it.times) || 1 }
+        return { date: it.date || date, topic: it.topic, question: it.question, angle: 'meta:' + JSON.stringify(meta), gift_doc: null, assigned_to: byName(it.assigned_to) }
+      }
       return { date: it.date || date, topic: it.topic, question: it.question || null, angle: it.angle || null, gift_doc: it.gift_doc || null, assigned_to: byName(it.assigned_to) }
     })
     await q(sb.from('seed_ideas').insert(rows))

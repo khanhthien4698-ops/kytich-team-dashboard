@@ -280,6 +280,17 @@ function Feedback({ yday, seen, onSeen }) {
 }
 
 // ---- Bước 2: nhận việc (cơ hội comment + thẻ gợi ý bài đăng) ----
+// Thẻ câu hỏi nguyên văn: nguồn/giờ/số lần lưu ở cột angle dạng "meta:{json}"
+function ideaMeta(i) {
+  if (!i.angle?.startsWith('meta:')) return null
+  try { return JSON.parse(i.angle.slice(5)) } catch { return null }
+}
+function metaLine(m) {
+  const src = m.src === 'web' ? '🤖 Web chatbot' : '💬 Zalo'
+  const at = m.at ? (m.at.includes('T') ? timeVN(m.at) : m.at) : ''
+  return [src, at, m.n > 1 ? `hỏi ${m.n} lần` : ''].filter(Boolean).join(' · ')
+}
+
 function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, reload, onComment, onWrite }) {
   const notify = useToast()
   const [busy, setBusy] = useState(null)
@@ -336,14 +347,20 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
 
       {tab === 'post' && (
         <>
-          {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có thẻ gợi ý. Bot sáng soạn thẻ từ câu học viên hỏi nhiều hôm qua (khoảng 8h–8h30 sáng).</div></div>}
+          {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có thẻ gợi ý. Khoảng 8h–8h30 sáng bot gom câu học viên hỏi thật trên chatbot web và Zalo 24h qua.</div></div>}
+          {ideas.some(ideaMeta) && <p className="mini ask-tip">Đây là câu học viên hỏi <b>nguyên văn</b>, để bạn biết người học hỏi thế nào. Viết bài trả lời từ nick/trang Kỳ Tích, không đăng lại như thể mình là người hỏi.</p>}
           <div className="ideas two">
             {ideas.map((i) => (
               <article key={i.id} className={'idea' + (mine(i) ? ' mine' : i.taken_by ? ' taken' : '')}>
-                <div className="topic">{i.topic}</div>
-                {i.question && <div className="q">“{i.question}”</div>}
-                {i.angle && <div className="kv"><b>Góc viết:</b> {i.angle}</div>}
-                {i.gift_doc && <div className="kv"><b>Tặng kèm:</b> {i.gift_doc}</div>}
+                {ideaMeta(i) ? <>
+                  <div className="idea-top"><span className="chip">{i.topic}</span><span className="sub">{metaLine(ideaMeta(i))}</span></div>
+                  <div className="ask">“{i.question}”</div>
+                </> : <>
+                  <div className="topic">{i.topic}</div>
+                  {i.question && <div className="q">“{i.question}”</div>}
+                  {i.angle && <div className="kv"><b>Góc viết:</b> {i.angle}</div>}
+                  {i.gift_doc && <div className="kv"><b>Tặng kèm:</b> {i.gift_doc}</div>}
+                </>}
                 {i.assigned_to && <div className="kv"><b>Giao cho:</b> {i.assigned_to === who.id ? 'bạn' : nameOf[i.assigned_to] || '—'}</div>}
                 <div className="foot">
                   {!i.taken_by && <button className="btn sm" disabled={busy === i.id} onClick={() => run(i.id, () => api.takeIdea(i.id), 'Đã lấy thẻ')}>Mình lấy</button>}

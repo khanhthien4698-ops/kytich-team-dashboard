@@ -138,7 +138,9 @@ Bảng tổng ghi mỗi ô "Việc x/y · Bài a/b · Cmt c/d", ★ điểm bot 
 |---|---|---|
 | `kytich-doi-nhom-10h` | mỗi 10 phút, 08:00–16:50 (task id giữ tên cũ) | chấm bài/comment hôm qua, góp ý, báo cáo đội nhóm, 8–12 thẻ gợi ý |
 | `kytich-doi-nhom-17h` | mỗi 10 phút, 17:00–23:50 | đọc group (chỉ đọc, đọc chậm): ghi "Cơ hội seeding" (chỉ group Key Aptis miễn phí, group duy nhất team được seeding từ 30/10) + gom review đề thi 48h qua vào `CLAUDE OUTPUTS/<ngày mai>-key/review_raw.txt` (chỉ ghi thêm, đối chiếu trùng, không tự làm key) |
-| `kytich-quet-group-3h` (chưa tạo) | mỗi 10 phút, khung 8h/11h/14h/20h | quét group Key Aptis miễn phí, ghi bài mới vào "Cơ hội seeding"; trang Hôm nay hiện thẻ "Có X bài mới cần seeding". `run-start scan` cho mỗi khung chạy 1 lần, các lượt dùng chung khoá Facebook nên không chạy chồng |
+| `kytich-quet-group-3h` | mỗi 10 phút, khung 8h/11h/14h/20h | quét group Key Aptis miễn phí, ghi bài mới vào "Cơ hội seeding"; trang Hôm nay hiện thẻ "Có X bài mới cần seeding". `run-start scan` cho mỗi khung chạy 1 lần, các lượt dùng chung khoá Facebook nên không chạy chồng |
+
+**Kho hỏi đáp Zalo** (`scripts/kho.mjs`): `npm run bot -- kho-build` gom mọi cặp "khách hỏi → Thiện trả lời" nguyên văn từ kho chat Zalo vào `~/Library/Application Support/kytich-bot/kho-hoi-dap.json` (+ `.csv` mở bằng Excel). Kho nằm trên máy, không vào repo. `npm run bot -- kho-fill` bù thẻ Gợi ý bài đăng hôm nay cho đủ 30 thẻ chưa ai nhận (ưu tiên câu chưa dùng, mới nhất, đa chủ đề). Lịch 8h và lịch quét 3 tiếng đều chạy 2 lệnh này.
 
 Mỗi lần chạy, bot gọi `npm run bot -- run-start morning|evening` trước: `DONE` (hôm nay xong rồi) hoặc `BUSY` (lần trước đang chạy) thì dừng ngay; `GO` thì làm. Xong gọi `run-done`, lỗi gọi `run-fail` để 10 phút sau thử lại. Nhờ vậy máy bật muộn vẫn chạy đúng 1 lần/ngày. Trạng thái lưu ở `~/Library/Application Support/kytich-bot/` (khoá treo quá 60 phút tự bỏ).
 Lịch chỉ chạy khi app Claude đang mở và máy bật; Chrome phải đang đăng nhập Facebook.

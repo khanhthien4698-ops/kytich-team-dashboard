@@ -10,6 +10,8 @@
 //   node scripts/bot.mjs to-review [YYYY-MM-DD] [--kind post|comment] [--all]  # bài/comment hôm qua chưa chấm
 //   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
+//   node scripts/bot.mjs kho-build                    # gom hỏi đáp Zalo nguyên văn vào kho trên máy (JSON + CSV)
+//   node scripts/bot.mjs kho-fill [--n 30]            # bù thẻ Gợi ý bài đăng hôm nay cho đủ N thẻ chưa ai nhận
 //   node scripts/bot.mjs target-text --file texts.json  # sửa nội dung bài đã có: [{ "url", "question" }]
 //   node scripts/bot.mjs groups                          # danh sách group Facebook đang dùng (JSON)
 //   node scripts/bot.mjs run-start morning|evening|scan  # in DONE / BUSY / GO (GO = giữ khóa, bắt đầu làm)
@@ -26,6 +28,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync, rmSync, statSync } 
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildKho, pickFromKho, normQ, KHO_FILE } from './kho.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const KEYCHAIN_SERVICE = 'kytich-dashboard-bot'
@@ -115,7 +118,13 @@ async function main() {
     if (cmd === 'run-fail') { rmSync(lock, { force: true }); return console.log('OK: đã nhả khóa ' + job) }
     die('Lệnh không hợp lệ: ' + cmd)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 22).join('\n')); return }
+  // ---- Kho hỏi đáp Zalo (trên máy, không cần đăng nhập) ----
+  if (cmd === 'kho-build') {
+    const kho = buildKho()
+    const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
+    return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
+  }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 24).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -267,6 +276,24 @@ async function main() {
     // Bài đã có (trùng url) thì giữ nguyên, không reset trạng thái người đã nhận
     const added = await q(sb.from('seed_targets').upsert(rows, { onConflict: 'url', ignoreDuplicates: true }).select('id'))
     console.log(`OK: thêm ${added.length} cơ hội mới (${rows.length - added.length} bài đã có, bỏ qua).`)
+  } else if (cmd === 'kho-fill') {
+    // Luôn để đủ N thẻ "chưa ai nhận" trong Gợi ý bài đăng hôm nay, bù từ kho hỏi đáp
+    const N = Number(a.n) || 30
+    const today = vnToday()
+    if (!existsSync(KHO_FILE)) die('Chưa có kho, chạy kho-build trước')
+    const kho = JSON.parse(readFileSync(KHO_FILE, 'utf8'))
+    const free = await q(sb.from('seed_ideas').select('id', { count: 'exact' }).eq('date', today).is('taken_by', null))
+    const need = N - free.length
+    if (need <= 0) return console.log(`OK: hôm nay đã đủ ${free.length} thẻ chưa ai nhận, không thêm.`)
+    const past = await q(sb.from('seed_ideas').select('question,date').gte('date', addDays(today, -365)))
+    const usedOn = new Map()
+    past.forEach((p) => { const k = normQ(p.question || ''); if (!usedOn.has(k) || usedOn.get(k) < p.date) usedOn.set(k, p.date) })
+    const picks = pickFromKho(kho, need, usedOn)
+    if (!picks.length) return console.log('Kho trống, không có câu để thêm.')
+    const ddmmhh = (at) => `${at.slice(8, 10)}/${at.slice(5, 7)} ${at.slice(11, 16)}`
+    const rows = picks.map((k) => ({ date: today, topic: k.topic, question: k.q, angle: 'meta:' + JSON.stringify({ src: 'zalo', at: ddmmhh(k.at), n: k.times, ans: k.a }), gift_doc: null, assigned_to: null }))
+    await q(sb.from('seed_ideas').insert(rows))
+    console.log(`OK: thêm ${rows.length} thẻ từ kho (${picks.filter((k) => !usedOn.has(normQ(k.q))).length} câu mới chưa dùng), giờ có ${free.length + rows.length} thẻ chưa ai nhận.`)
   } else if (cmd === 'target-text') {
     // Sửa nội dung bài (cột question) của cơ hội đã có theo url; không đụng trạng thái/người nhận
     if (!a.file) die('Cần --file texts.json')

@@ -1,6 +1,6 @@
 # Dashboard đội nhóm Kỳ Tích
 
-Bảng việc chung của team: nhân viên tick việc hằng ngày, ghi bài seeding, nhận thẻ gợi ý nội dung; Thiện xem Bảng tổng 7 ngày và cài đặt. Bot 10h sáng ghi báo cáo + thẻ gợi ý.
+Bảng việc chung của team: nhân viên tick việc hằng ngày, ghi bài seeding, nhận thẻ gợi ý nội dung; Thiện xem Bảng tổng 7 ngày và cài đặt. Bot 8h sáng ghi báo cáo + thẻ gợi ý.
 
 - Frontend: Vite + React (tĩnh), gọi Supabase bằng anon key.
 - DB + đăng nhập: một project Supabase **riêng** (không dính gì tới web học viên aptiskytich.vn).
@@ -136,7 +136,7 @@ Bảng tổng ghi mỗi ô "Việc x/y · Bài a/b · Cmt c/d", ★ điểm bot 
 ### Hai lịch tự động (scheduled task của Claude trên máy Thiện)
 | Lịch | Chạy | Làm gì |
 |---|---|---|
-| `kytich-doi-nhom-10h` | mỗi 10 phút, 10:00–16:50 | chấm bài/comment hôm qua, góp ý, báo cáo đội nhóm, 8–12 thẻ gợi ý |
+| `kytich-doi-nhom-10h` | mỗi 10 phút, 08:00–16:50 (task id giữ tên cũ) | chấm bài/comment hôm qua, góp ý, báo cáo đội nhóm, 8–12 thẻ gợi ý |
 | `kytich-doi-nhom-17h` | mỗi 10 phút, 17:00–23:50 | đọc group (chỉ đọc, đọc chậm): ghi "Cơ hội seeding" (chỉ group Key Aptis miễn phí, group duy nhất team được seeding từ 30/10) + gom review đề thi 48h qua vào `CLAUDE OUTPUTS/<ngày mai>-key/review_raw.txt` (chỉ ghi thêm, đối chiếu trùng, không tự làm key) |
 
 Mỗi lần chạy, bot gọi `npm run bot -- run-start morning|evening` trước: `DONE` (hôm nay xong rồi) hoặc `BUSY` (lần trước đang chạy) thì dừng ngay; `GO` thì làm. Xong gọi `run-done`, lỗi gọi `run-fail` để 10 phút sau thử lại. Nhờ vậy máy bật muộn vẫn chạy đúng 1 lần/ngày. Trạng thái lưu ở `~/Library/Application Support/kytich-bot/` (khoá treo quá 60 phút tự bỏ).
@@ -149,7 +149,7 @@ Lịch chỉ chạy khi app Claude đang mở và máy bật; Chrome phải đan
 
 Trên web, mục **Cơ hội seeding** ở "Hôm nay của tôi": "Mình nhận" (không 2 người nhận trùng) → comment trên Facebook → "Đã comment" + dán link comment: tự thành 1 dòng seeding loại Comment nối với cơ hội. Có "Trả lại" / "Bỏ qua". Tab **Hiệu quả** đếm số cơ hội tìm được, đã comment, bỏ qua, bỏ lỡ theo người và theo group.
 
-### Lịch 10h: chấm bài + comment hôm qua
+### Lịch 8h: chấm bài + comment hôm qua
 1. `npm run bot -- to-review` → JSON các bài/comment **hôm qua** chưa chấm (`--kind post` hoặc `--kind comment` để lọc).
 2. Claude in Chrome mở từng link, **CHỈ ĐỌC**: không like, không comment, không chia sẻ, không đăng gì lên Facebook.
 3. Chấm theo tiêu chí dưới, viết file theo mẫu `scripts/examples/reviews.example.json`.

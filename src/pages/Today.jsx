@@ -223,7 +223,7 @@ function Feedback({ yday, seen, onSeen }) {
       {!fb && posts.length === 0 && (
         <div className="all-done"><Mascot who="kyky" pose="sleeping" className="" /><div className="sub">Hôm qua chưa có bài nào để chấm. Hôm nay mình làm thật tốt nhé!</div></div>
       )}
-      {!fb && posts.length > 0 && <p className="empty">Bot chưa chấm xong (thường xong khoảng 10h–10h30 sáng).</p>}
+      {!fb && posts.length > 0 && <p className="empty">Bot chưa chấm xong (thường xong khoảng 8h–8h30 sáng).</p>}
       {fb && (
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <Mascot who="kyky" pose={avg >= 4 ? 'cheer' : avg && avg < 3 ? 'thinking' : 'idea'} className="" />
@@ -310,7 +310,7 @@ function PickWork({ who, me, targets, ideas, nameOf, date, reload, onComment, on
 
       {tab === 'post' && (
         <>
-          {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có thẻ gợi ý. Bot sáng soạn thẻ từ câu học viên hỏi nhiều hôm qua (khoảng 10h–10h30 sáng).</div></div>}
+          {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có thẻ gợi ý. Bot sáng soạn thẻ từ câu học viên hỏi nhiều hôm qua (khoảng 8h–8h30 sáng).</div></div>}
           <div className="ideas two">
             {ideas.map((i) => (
               <article key={i.id} className={'idea' + (mine(i) ? ' mine' : i.taken_by ? ' taken' : '')}>

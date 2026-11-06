@@ -728,3 +728,14 @@ details.more summary { color: var(--ink-2); font-weight: 600; }
 .mcard ul, .msugg ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); }
 .mcard li, .msugg li { margin: 2px 0; }
 .msugg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--orange-soft); font-size: 14px; }
+
+/* ===== Bàn việc của Thiện (tab riêng, trang nằm trong khung) ===== */
+.bv-frame { display: block; width: 100%; border: 0; height: calc(100vh - var(--hh, 61px)); height: calc(100dvh - var(--hh, 61px)); background: var(--bg); }
+body.bv-mode { overflow: hidden; }
+@media (max-width: 760px) {
+  body.bv-mode .topbar-in { height: auto; flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; }
+  body.bv-mode .topbar .nav { display: flex; order: 3; width: 100%; margin-left: 0; justify-content: space-between; overflow-x: auto; scrollbar-width: none; }
+  body.bv-mode .topbar .nav::-webkit-scrollbar { display: none; }
+  body.bv-mode .topbar .nav button { font-size: 13px; padding: 6px 10px; white-space: nowrap; }
+  body.bv-mode .bottom-nav { display: none; }
+}

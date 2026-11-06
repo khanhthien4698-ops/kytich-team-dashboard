@@ -61,15 +61,41 @@ const ADMIN_TABS = [
   { id: 'settings', ic: '⚙️', label: 'Cài đặt' },
 ]
 
+// Bàn việc riêng của Thiện: tab chỉ hiện với đúng tài khoản Thiện. Dữ liệu nằm ở bảng owner_docs,
+// RLS chỉ cho tài khoản Thiện (và bot của lịch 10h) đọc/ghi, nên người khác gõ #ban-viec cũng không có gì.
+const OWNER_LOGIN = 'thienbk@'
+const BV_TAB = { id: 'ban-viec', ic: '🗂️', label: 'Bàn việc' }
+
+function applyTheme(v) {
+  store.set('kt_theme', v)
+  if (v === 'auto') delete document.documentElement.dataset.theme
+  else document.documentElement.dataset.theme = v
+}
+
+function BanViec() {
+  // Trang Bàn việc (public/ban-viec.html) mượn client Supabase đang đăng nhập của dashboard
+  useState(() => { window.__ktSb = sb; window.__ktSetTheme = applyTheme })
+  useEffect(() => () => { delete window.__ktSb; delete window.__ktSetTheme }, [])
+  useEffect(() => { // khung chiếm hết phần dưới thanh trên cùng
+    const fit = () => document.documentElement.style.setProperty('--hh', (document.querySelector('.topbar')?.offsetHeight || 61) + 'px')
+    fit(); const t = setTimeout(fit, 200); addEventListener('resize', fit)
+    return () => { clearTimeout(t); removeEventListener('resize', fit) }
+  }, [])
+  return <iframe className="bv-frame" src={import.meta.env.BASE_URL + 'ban-viec.html'} title="Bàn việc" />
+}
+
 function Shell({ me }) {
   const isAdmin = me.role === 'admin'
-  const TABS = isAdmin ? ADMIN_TABS : STAFF_TABS
+  const isOwner = !DEMO && isAdmin && (me.login_email || '').toLowerCase().startsWith(OWNER_LOGIN)
+  const TABS = isOwner ? [ADMIN_TABS[0], BV_TAB, ...ADMIN_TABS.slice(1)] : isAdmin ? ADMIN_TABS : STAFF_TABS
   const [tab, setTab] = useState(() => {
     const h = location.hash.slice(1)
     return TABS.some((t) => t.id === h) ? h : 'board'
   })
   const [viewId, setViewId] = useState(null) // xem "Việc của tôi" của người khác
   useEffect(() => { if (isAdmin && tab === 'today' && !viewId) setTab('board') }, [isAdmin, tab, viewId])
+  useEffect(() => { if (tab === 'ban-viec' && !isOwner) { setTab('board'); history.replaceState(null, '', '#board') } }, [tab, isOwner])
+  useEffect(() => { document.body.classList.toggle('bv-mode', tab === 'ban-viec' && isOwner) }, [tab, isOwner])
   const go = (t) => { setTab(t); if (t === 'today') setViewId(null); history.replaceState(null, '', '#' + t); scrollTo({ top: 0 }) }
   const openMember = (id) => { setViewId(id === me.id ? null : id); setTab('today'); history.replaceState(null, '', '#today'); scrollTo({ top: 0 }) }
   const [menu, setMenu] = useState(false)
@@ -115,7 +141,8 @@ function Shell({ me }) {
         </div>
       </header>
 
-      <main className="wrap">
+      {tab === 'ban-viec' && isOwner && <BanViec />}
+      <main className="wrap" hidden={tab === 'ban-viec'}>
         {tab === 'today' && (!isAdmin || viewId) && <Today me={me} hasNav viewId={viewId} onView={(id) => { setViewId(id); scrollTo({ top: 0 }) }} />}
         {tab === 'board' && <Board me={me} onOpen={openMember} />}
         {tab === 'effect' && isAdmin && <Effect />}
@@ -213,9 +240,9 @@ function NotConfigured() {
 function ThemePick() {
   const [t, setT] = useState(() => store.get('kt_theme') || 'auto')
   const pick = (v) => {
-    setT(v); store.set('kt_theme', v)
-    if (v === 'auto') delete document.documentElement.dataset.theme
-    else document.documentElement.dataset.theme = v
+    setT(v); applyTheme(v)
+    const f = document.querySelector('.bv-frame') // Bàn việc đang mở thì tải lại cho đổi theo
+    if (f) { try { f.contentWindow.localStorage.setItem('bv-theme', v) } catch (_) {} f.contentWindow?.location.reload() }
   }
   return (
     <div className="theme-pick">

@@ -19,6 +19,10 @@
 //   node scripts/bot.mjs run-start morning|evening|scan  # in DONE / BUSY / GO (GO = giữ khóa, bắt đầu làm)
 //   node scripts/bot.mjs run-done  morning|evening|scan  # đánh dấu đã xong (scan: xong khung giờ hiện tại), nhả khóa
 //   node scripts/bot.mjs run-fail  morning|evening|scan  # nhả khóa để lần thử sau (10 phút) chạy lại
+//   node scripts/bot.mjs bv-get [tasks|ideas|focus|reports|days|meta] [--id ID]  # Bàn việc của Thiện: in JSON [{col,id,data}]
+//   node scripts/bot.mjs bv-put --file x.json [--merge]  # ghi Bàn việc: [{col,id,data}] (hoặc file xuất {tasks:[{id,data}],...}); --merge = chỉ đè các trường gửi lên
+//   node scripts/bot.mjs bv-del --col tasks --id ID [--id ID2]  # xoá hẳn bản ghi Bàn việc (luật dọn việc xong quá 14 ngày)
+//   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
 //   Mọi lượt dùng chung Facebook nên không chạy chồng nhau. scan in "GO since=<ISO>" = lần đọc group gần nhất.
 //
@@ -70,7 +74,10 @@ const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDa
 function args(argv) {
   const o = { _: [] }
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) o[argv[i].slice(2)] = argv[i + 1]?.startsWith('--') || argv[i + 1] === undefined ? true : argv[++i]
+    if (argv[i].startsWith('--')) {
+      const k = argv[i].slice(2), v = argv[i + 1]?.startsWith('--') || argv[i + 1] === undefined ? true : argv[++i]
+      o[k] = k in o ? [].concat(o[k], v) : v // lặp lại khoá (vd nhiều --id) thì gom thành mảng
+    }
     else o._.push(argv[i])
   }
   return o
@@ -126,7 +133,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 26).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 30).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -310,6 +317,41 @@ async function main() {
     const rows = picks.map((k) => ({ date: today, topic: k.topic, question: k.q, angle: 'meta:' + JSON.stringify({ src: 'zalo', at: ddmmhh(k.at), n: k.times, ans: k.a }), gift_doc: null, assigned_to: null }))
     for (let i = 0; i < rows.length; i += 200) await q(sb.from('seed_ideas').insert(rows.slice(i, i + 200)))
     console.log(`OK: nạp ${rows.length} câu (${fresh.length} câu mới), kho trên dashboard giờ có ${freeNow + rows.length} câu trống.`)
+  } else if (cmd === 'bv-get') {
+    const COLS = ['tasks', 'ideas', 'focus', 'reports', 'days', 'meta']
+    const col = a._[1]
+    if (col && !COLS.includes(col)) die('col phải là một trong: ' + COLS.join(', '))
+    let rows = [], from = 0
+    for (;;) { // lấy hết, mỗi lần 1000 dòng
+      let p = sb.from('owner_docs').select('col,id,data').order('col').order('id').range(from, from + 999)
+      if (col) p = p.eq('col', col)
+      if (a.id) p = p.in('id', [].concat(a.id))
+      const d = await q(p); rows = rows.concat(d); if (d.length < 1000) break; from += 1000
+    }
+    console.log(JSON.stringify(rows, null, 1))
+  } else if (cmd === 'bv-put') {
+    if (!a.file) die('Cần --file x.json')
+    const raw = JSON.parse(readFileSync(a.file, 'utf8'))
+    // Nhận cả file xuất từ trang cũ: { tasks: [{id,data}], ideas: [...], meta: [...], ... }
+    const rows = Array.isArray(raw) ? raw : Object.entries(raw).filter(([k, v]) => !k.startsWith('_') && Array.isArray(v)).flatMap(([col, v]) => v.map((x) => ({ col, id: x.id, data: x.data })))
+    for (const r of rows) if (!r.col || !r.id || typeof r.data !== 'object' || r.data === null) die('Mỗi dòng cần col, id, data (object)')
+    let n = 0
+    for (let i = 0; i < rows.length; i += 200) {
+      let chunk = rows.slice(i, i + 200)
+      if (a.merge) {
+        const old = await q(sb.from('owner_docs').select('col,id,data').in('id', chunk.map((r) => r.id)))
+        chunk = chunk.map((r) => { const o = old.find((x) => x.col === r.col && x.id === r.id); return { ...r, data: { ...(o?.data || {}), ...r.data } } })
+      }
+      await q(sb.from('owner_docs').upsert(chunk.map((r) => ({ col: r.col, id: String(r.id), data: r.data, updated_at: new Date().toISOString() })), { onConflict: 'col,id' }))
+      n += chunk.length
+    }
+    const by = {}; rows.forEach((r) => { by[r.col] = (by[r.col] || 0) + 1 })
+    console.log(`OK: đã ghi ${n} bản ghi Bàn việc (${Object.entries(by).map(([k, v]) => k + ' ' + v).join(', ')}).`)
+  } else if (cmd === 'bv-del') {
+    if (!a.col || !a.id) die('Cần --col và ít nhất một --id')
+    const ids = [].concat(a.id)
+    const d = await q(sb.from('owner_docs').delete().eq('col', a.col).in('id', ids).select('id'))
+    console.log(`OK: đã xoá ${d.length}/${ids.length} bản ghi ${a.col}.`)
   } else if (cmd === 'market') {
     // Báo cáo đối thủ / thị trường cho cả team (1 bản mỗi ngày, ghi lại thì đè bản cùng ngày)
     if (!a.file) die('Cần --file market.json')

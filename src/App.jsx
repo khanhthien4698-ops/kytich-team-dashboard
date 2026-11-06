@@ -49,13 +49,14 @@ export default function App() {
   )
 }
 
-// Ai cũng có "Cả đội" + "Việc của tôi"; admin thêm Hiệu quả, Cài đặt (Thiện chốt 06/11)
+// Nhân viên: "Cả đội" + "Việc của tôi". Admin: không có "Việc của tôi" (Thiện chốt 06/11),
+// chỉ xem việc của từng người khi bấm vào thẻ người đó ở "Cả đội"; thêm Hiệu quả, Cài đặt
 const STAFF_TABS = [
   { id: 'board', ic: '👥', label: 'Cả đội' },
   { id: 'today', ic: '✅', label: 'Việc của tôi' },
 ]
 const ADMIN_TABS = [
-  ...STAFF_TABS,
+  STAFF_TABS[0],
   { id: 'effect', ic: '📈', label: 'Hiệu quả' },
   { id: 'settings', ic: '⚙️', label: 'Cài đặt' },
 ]
@@ -68,6 +69,7 @@ function Shell({ me }) {
     return TABS.some((t) => t.id === h) ? h : 'board'
   })
   const [viewId, setViewId] = useState(null) // xem "Việc của tôi" của người khác
+  useEffect(() => { if (isAdmin && tab === 'today' && !viewId) setTab('board') }, [isAdmin, tab, viewId])
   const go = (t) => { setTab(t); if (t === 'today') setViewId(null); history.replaceState(null, '', '#' + t); scrollTo({ top: 0 }) }
   const openMember = (id) => { setViewId(id === me.id ? null : id); setTab('today'); history.replaceState(null, '', '#today'); scrollTo({ top: 0 }) }
   const [menu, setMenu] = useState(false)
@@ -114,7 +116,7 @@ function Shell({ me }) {
       </header>
 
       <main className="wrap">
-        {tab === 'today' && <Today me={me} hasNav viewId={viewId} onView={(id) => { setViewId(id); scrollTo({ top: 0 }) }} />}
+        {tab === 'today' && (!isAdmin || viewId) && <Today me={me} hasNav viewId={viewId} onView={(id) => { setViewId(id); scrollTo({ top: 0 }) }} />}
         {tab === 'board' && <Board me={me} onOpen={openMember} />}
         {tab === 'effect' && isAdmin && <Effect />}
         {tab === 'settings' && isAdmin && <Settings me={me} />}

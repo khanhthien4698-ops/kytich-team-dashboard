@@ -86,7 +86,11 @@ export default function Board({ go }) {
     if (y.bad?.length) todo.push({ c: 'r', t: `Xem bài bị gỡ của ${n}`, s: `${y.bad.length} bài hôm qua`, go: () => open(m, yday) })
     else if (teamWorkedYday && y.cls === 'r') todo.push({ c: 'y', t: `Hỏi ${n} vì sao hôm qua nghỉ`, s: 'Không ghi gì hôm qua', go: () => open(m, yday) })
   })
-  if (newTargets + freeIdeas > 0) todo.push({ c: 'y', t: 'Nhắc team nhận việc', s: `${newTargets} bài cần comment · ${freeIdeas} thẻ gợi ý chưa ai nhận` })
+  if (newTargets + freeIdeas > 0) todo.push({ c: 'y', t: 'Nhắc team nhận việc', s: `${newTargets} bài cần trả lời · ${freeIdeas} ý tưởng bài đăng chưa ai nhận` })
+  const sum = (k) => todayS.reduce((t, p) => t + (p.s[k] || 0), 0)
+  const sumY = (k) => todayS.reduce((t, p) => t + (p.y[k] || 0), 0)
+  const yAvgs = todayS.map((p) => p.y.avg).filter(Boolean)
+  const ydayAvg = yAvgs.length ? yAvgs.reduce((t, v) => t + v, 0) / yAvgs.length : null
   const pose = teamPct >= 1 ? 'trophy' : todo.some((a) => a.c === 'r') ? 'search' : 'cheer'
 
   return (
@@ -97,15 +101,23 @@ export default function Board({ go }) {
           <div>
             <div className="hero-hello">{greet()} · {longDate(today)}</div>
             <div className="big-pct">{Math.round(teamPct * 100)}<small>%</small></div>
-            <div className="ov-line">team hoàn thành hôm nay · {working}/{todayS.length} bạn đang làm</div>
+            <div className="ov-line">đội hoàn thành hôm nay · {working}/{todayS.length} bạn đang làm</div>
           </div>
         </div>
       </section>
 
+      {/* Số liệu nhanh hôm nay (kiểu Stripe) */}
+      <div className="kpis kpis4">
+        <div className="kpi"><div className="lbl">Hoàn thành</div><div className="v">{Math.round(teamPct * 100)}%</div><div className="mini">{working}/{todayS.length} bạn đang làm</div></div>
+        <div className="kpi"><div className="lbl">Bài đã đăng</div><div className="v">{sum('a')}<small> / {sum('b')}</small></div><div className="mini">hôm qua {sumY('a')}</div></div>
+        <div className="kpi"><div className="lbl">Bài đã trả lời</div><div className="v">{sum('c')}<small> / {sum('d')}</small></div><div className="mini">hôm qua {sumY('c')}</div></div>
+        <div className="kpi"><div className="lbl">Điểm TB của bot</div><div className="v">{ydayAvg ? '★ ' + ydayAvg.toFixed(1).replace('.', ',') : '—'}</div><div className="mini">bài hôm qua, thang 5</div></div>
+      </div>
+
       <section className="card">
-        <div className="card-h"><h2>Việc của Thiện</h2><span className="count sub">{todo.length ? `${todo.length} việc` : ''}</span></div>
+        <div className="card-h"><h2>Cần bạn xem</h2><span className="count sub">{todo.length ? `${todo.length} việc` : ''}</span></div>
         {todo.length === 0 ? (
-          <div className="all-done"><Mascot who="tichtich" pose="cheer" className="" /><div><h3>Không có gì cần làm</h3><div className="sub">Team đang chạy ổn.</div></div></div>
+          <div className="all-done"><Mascot who="tichtich" pose="cheer" className="" /><div><h3>Không có gì cần xem</h3><div className="sub">Đội đang chạy tốt.</div></div></div>
         ) : (
           <div className="next">
             {todo.slice(0, 4).map((a, i) => (

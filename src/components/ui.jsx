@@ -22,7 +22,7 @@ export function greet(hour = new Date().getHours()) {
   return 'Chào buổi tối'
 }
 
-export function Ring({ value, total, size = 64, stroke = 7, color = '#FEAD5F', track = 'rgba(255,255,255,.15)', children }) {
+export function Ring({ value, total, size = 64, stroke = 7, color = '#CC1C01', track = '#f3ebe7', children }) {
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const pct = total > 0 ? Math.min(1, value / total) : value > 0 ? 1 : 0
@@ -31,7 +31,7 @@ export function Ring({ value, total, size = 64, stroke = 7, color = '#FEAD5F', t
     <div className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={done ? '#3ddc84' : color} strokeWidth={stroke} strokeLinecap="round"
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={done ? '#2bb673' : color} strokeWidth={stroke} strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - pct)} />
       </svg>
       <div className="val">{children ?? <>{value}<small>/{total}</small></>}</div>
@@ -66,8 +66,8 @@ export const store = {
 const TOURS = {
   staff: [
     { pose: 'waving', title: 'Chào bạn, mình là Kỳ Kỳ!', body: <p>Mỗi ngày mình sẽ chỉ cho bạn <b>việc tiếp theo nên làm</b>. Cứ nhìn bong bóng của mình ở đầu trang là biết.</p> },
-    { pose: 'checklist', title: 'Một ngày gồm 4 bước', body: <ol><li><b>Đọc góp ý</b> bot chấm bài hôm qua</li><li><b>Nhận việc</b>: nhận bài cần comment, lấy thẻ gợi ý để viết bài</li><li><b>Làm & ghi lại</b>: tick việc, dán link bài / comment</li><li><b>Chốt ngày</b> bằng 1 câu</li></ol> },
-    { pose: 'idea', title: 'Đăng xong là dán link', body: <p>Bấm nút <b>+ Ghi seeding</b> ở góc dưới, dán link. Mình tự nhận ra đó là <b>bài đăng hay comment</b> và <b>group nào</b>. Không đóng vai học viên, không chép tin nhắn khách nhé!</p> },
+    { pose: 'checklist', title: 'Một ngày gồm 4 bước', body: <ol><li><b>Đọc góp ý</b> bot chấm bài hôm qua</li><li><b>Nhận việc</b>: nhận bài cần trả lời, nhận ý tưởng bài đăng</li><li><b>Làm và ghi lại</b>: tích việc, dán link bài đã làm</li><li><b>Chốt ngày</b> bằng 1 câu</li></ol> },
+    { pose: 'idea', title: 'Đăng xong là dán link', body: <p>Bấm nút <b>+ Thêm link</b> ở góc dưới rồi dán link. Web tự nhận ra đó là <b>bài đăng hay bài trả lời</b> và <b>group nào</b>. Không đóng vai học viên, không chép tin nhắn khách nhé!</p> },
   ],
   admin: [
     { pose: 'waving', title: 'Chào Thiện, mình là Tích Tích!', body: <p>Trang <b>Tổng quan</b> cho Thiện biết ngay hôm nay team đang ra sao, ai cần nhắc, bài nào bị gỡ.</p> },

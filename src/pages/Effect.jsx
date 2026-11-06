@@ -29,7 +29,7 @@ function Table({ title, rows }) {
       <div className="board-scroll">
         <table className="eff">
           <thead>
-            <tr><th></th><th>Bài · Cmt</th><th>Đã chấm</th><th>Tương tác</th><th>TB/bài</th><th>Điểm TB</th><th>Gỡ/ẩn</th><th>Vi phạm</th></tr>
+            <tr><th></th><th>Bài · Trả lời</th><th>Đã chấm</th><th>Tương tác</th><th>TB/bài</th><th>Điểm TB</th><th>Gỡ/ẩn</th><th>Vi phạm</th></tr>
           </thead>
           <tbody>
             {rows.length === 0 && <tr><td colSpan={8} className="empty">Chưa có dữ liệu.</td></tr>}
@@ -99,7 +99,7 @@ export default function Effect() {
     <>
       {head}
       <div className="kpis">
-        <div className="kpi"><div className="lbl">Bài · Comment</div><div className="v">{all.nPost}<small> · {all.nCmt}</small></div></div>
+        <div className="kpi"><div className="lbl">Bài · Trả lời</div><div className="v">{all.nPost}<small> · {all.nCmt}</small></div></div>
         <div className="kpi"><div className="lbl">Đã chấm</div><div className="v">{all.checked}<small>/{all.posts}</small></div></div>
         <div className="kpi"><div className="lbl">Tổng tương tác</div><div className="v">{all.inter}</div></div>
         <div className="kpi"><div className="lbl">Điểm TB</div><div className="v">{all.avg ? '★' + all.avg.toFixed(1) : '—'}</div></div>
@@ -147,7 +147,7 @@ function Targets({ targets, members }) {
   const T = ({ title, rows }) => (
     <div className="board-scroll" style={{ marginTop: 8 }}>
       <table className="eff" style={{ minWidth: 420 }}>
-        <thead><tr><th>{title}</th><th>Tìm được</th><th>Đã comment</th><th>Bỏ qua</th><th>Bỏ lỡ</th></tr></thead>
+        <thead><tr><th>{title}</th><th>Tìm được</th><th>Đã trả lời</th><th>Bỏ qua</th><th>Bỏ lỡ</th></tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td colSpan={5} className="empty">Chưa có dữ liệu.</td></tr>}
           {rows.map(([k, s]) => (
@@ -160,10 +160,10 @@ function Targets({ targets, members }) {
   return (
     <section className="card">
       <div className="card-h">
-        <h2>Cơ hội seeding</h2>
-        <span className="count">{all.done}/{all.found} đã comment · {all.missed} bỏ lỡ</span>
+        <h2>Bài cần trả lời</h2>
+        <span className="count">{all.done}/{all.found} đã trả lời · {all.missed} bỏ lỡ</span>
       </div>
-      <p className="mini" style={{ marginTop: 0 }}>Bài của người khác bot tìm lúc 17h. Bỏ lỡ = tới hôm qua vẫn chưa ai comment (chưa nhận hoặc nhận mà chưa làm).</p>
+      <p className="mini" style={{ marginTop: 0 }}>Bài của người khác bot tìm trong group. Bỏ lỡ là bài tới hôm qua vẫn chưa ai trả lời.</p>
       <T title="Theo người" rows={byPerson} />
       <T title="Theo group" rows={byGroup} />
     </section>

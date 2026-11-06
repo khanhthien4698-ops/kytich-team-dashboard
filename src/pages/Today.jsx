@@ -5,9 +5,9 @@ import { useToast } from '../App.jsx'
 import Review from '../components/Review.jsx'
 import { Mascot, Ring, Sheet, poseFor, greet, store, shortName } from '../components/ui.jsx'
 
-export const KIND = { post: 'Bài đăng', comment: 'Comment vào bài người khác' }
-export const KIND_SHORT = { post: 'Bài đăng', comment: 'Comment' }
-const T_STATUS = { new: 'Mới', taken: 'Đã nhận', commented: 'Đã comment', skipped: 'Bỏ qua' }
+export const KIND = { post: 'Bài đăng', comment: 'Trả lời bài người khác' }
+export const KIND_SHORT = { post: 'Bài đăng', comment: 'Trả lời' }
+const T_STATUS = { new: 'Mới', taken: 'Đã nhận', commented: 'Đã trả lời', skipped: 'Bỏ qua' }
 
 // Đoán loại + group từ link Facebook
 const groupKey = (u = '') => u.match(/groups\/([^/?#]+)/i)?.[1]?.toLowerCase()
@@ -91,11 +91,11 @@ export default function Today({ me, hasNav }) {
     try { await api.saveCheck(row) } catch (x) { notify(x.message, true); load() }
   }
   async function doneTarget(t) {
-    try { await api.completeTarget(t.id, t.url); notify('Đã ghi: bạn đã comment vào bài này 🎉') } catch (x) { notify(x.message, true) }
+    try { await api.completeTarget(t.id, t.url); notify('Đã ghi. Cảm ơn bạn!') } catch (x) { notify(x.message, true) }
     load()
   }
   async function take(t) {
-    try { await api.takeTarget(t.id); notify('Đã nhận. Comment xong nhớ bấm "Đã comment" nhé!') } catch (x) { notify(x.message, true) }
+    try { await api.takeTarget(t.id); notify('Đã nhận. Trả lời xong thì tích "Đã trả lời bài này".') } catch (x) { notify(x.message, true) }
     load()
   }
 
@@ -114,14 +114,14 @@ export default function Today({ me, hasNav }) {
   const myIdea = ideas.find((i) => i.taken_by === who.id && !day.posts.some((p) => p.idea_id === i.id))
   const freeIdeas = ideas.filter((i) => !i.taken_by)
   if (yday.fb && !fbSeen) next.push({ ic: '💬', t: 'Đọc góp ý của bot cho bài hôm qua', s: yday.fb.text.slice(0, 70) + (yday.fb.text.length > 70 ? '…' : ''), btn: 'Đọc', go: () => { store.set(fbKey, '1'); scrollToId('s1'); load() } })
-  if (myTaken.length) next.push({ ic: '✍️', t: `Bạn đang giữ ${myTaken.length} bài chưa comment`, s: myTaken[0].question, btn: 'Đã comment', go: () => doneTarget(myTaken[0]) })
+  if (myTaken.length) next.push({ ic: '✍️', t: `Bạn đang giữ ${myTaken.length} bài chưa trả lời`, s: myTaken[0].question, btn: 'Đã trả lời', go: () => doneTarget(myTaken[0]) })
   else if (nCmt < qCmt && openTargets.length) {
     const t = myOpen[0] || openTargets[0]
-    next.push({ ic: '🎯', t: `Nhận 1 bài để comment (còn ${qCmt - nCmt} comment)`, s: t.question, btn: 'Nhận', go: () => take(t) })
-  } else if (nCmt < qCmt) next.push({ ic: '💭', t: `Còn ${qCmt - nCmt} comment nữa`, s: 'Tìm bài hỏi về Aptis trong group, trả lời thật có ích rồi dán link', btn: 'Ghi', go: () => setQuick({ kind: 'comment' }) })
+    next.push({ ic: '🎯', t: `Trả lời thêm ${qCmt - nCmt} bài để đủ chỉ tiêu`, s: t.question, btn: 'Nhận bài', go: () => take(t) })
+  } else if (nCmt < qCmt) next.push({ ic: '💭', t: `Còn ${qCmt - nCmt} bài trả lời nữa`, s: 'Tìm bài hỏi về Aptis trong group, trả lời thật có ích rồi dán link', btn: 'Thêm link', go: () => setQuick({ kind: 'comment' }) })
   if (nPost < qPost) {
-    if (myIdea) next.push({ ic: '📝', t: `Viết bài từ thẻ “${myIdea.topic}”`, s: `Còn ${qPost - nPost} bài đăng`, btn: 'Ghi link', go: () => setQuick({ kind: 'post', ideaId: myIdea.id }) })
-    else if (freeIdeas.length) next.push({ ic: '💡', t: `Lấy 1 thẻ gợi ý để viết bài (còn ${qPost - nPost} bài)`, s: `${freeIdeas.length} thẻ chưa ai lấy`, btn: 'Xem thẻ', go: () => scrollToId('s2') })
+    if (myIdea) next.push({ ic: '📝', t: `Viết bài từ ý tưởng “${myIdea.topic}”`, s: `Còn ${qPost - nPost} bài đăng`, btn: 'Ghi link', go: () => setQuick({ kind: 'post', ideaId: myIdea.id }) })
+    else if (freeIdeas.length) next.push({ ic: '💡', t: `Nhận 1 ý tưởng để viết bài (còn ${qPost - nPost} bài)`, s: `${freeIdeas.length} ý tưởng chưa ai nhận`, btn: 'Xem ý tưởng', go: () => scrollToId('s2') })
     else next.push({ ic: '📝', t: `Còn ${qPost - nPost} bài đăng nữa`, s: 'Đăng xong dán link vào là được', btn: 'Ghi', go: () => setQuick({ kind: 'post' }) })
   }
   const undone = routines.find((r) => !checkOf(r.id)?.done)
@@ -157,7 +157,7 @@ export default function Today({ me, hasNav }) {
         <div className="rings">
           <div className="ring-box"><Ring value={doneR} total={totalR} /><span className="lbl">Việc</span></div>
           <div className="ring-box"><Ring value={nPost} total={qPost} /><span className="lbl">Bài đăng</span></div>
-          <div className="ring-box"><Ring value={nCmt} total={qCmt} /><span className="lbl">Comment</span></div>
+          <div className="ring-box"><Ring value={nCmt} total={qCmt} /><span className="lbl">Bài trả lời</span></div>
         </div>
       </section>
 
@@ -165,7 +165,7 @@ export default function Today({ me, hasNav }) {
         <section className="fresh">
           <span className="fresh-bell">🔔</span>
           <div className="fresh-txt">
-            <b>Có {freshT.length} bài mới cần seeding</b>
+            <b>{freshT.length} bài mới cần trả lời</b>
             <span>Bot vừa tìm thấy lúc {timeVN(lastFound)}{freshT.some((t) => t.assigned_to === who.id) ? ` · ${freshT.filter((t) => t.assigned_to === who.id).length} bài giao cho bạn` : ''}. Vào nhận trước khi bài trôi nhé!</span>
           </div>
           <button className="btn sm" onClick={seeFresh}>Xem ngay</button>
@@ -175,11 +175,11 @@ export default function Today({ me, hasNav }) {
       <div className="grid2">
         {/* ---- Việc tiếp theo ---- */}
         <section className="card">
-          <div className="card-h"><h2>⚡ Làm gì tiếp theo?</h2><span className="count sub">Kỳ Kỳ gợi ý</span></div>
+          <div className="card-h"><h2>Việc tiếp theo</h2></div>
           {next.length === 0 ? (
             <div className="all-done">
               <Mascot who="kyky" pose="trophy" className="" />
-              <div><h3>Xong hết rồi!</h3><div className="sub">Đủ việc, đủ bài, đủ comment{day.note ? ', đã chốt ngày' : ''}. Nghỉ ngơi thôi.</div></div>
+              <div><h3>Xong hết rồi!</h3><div className="sub">Đủ việc, đủ bài đăng, đủ bài trả lời{day.note ? ', đã chốt ngày' : ''}. Nghỉ ngơi thôi.</div></div>
             </div>
           ) : (
             <div className="next">
@@ -207,7 +207,7 @@ export default function Today({ me, hasNav }) {
 
       <DayNote date={date} who={who} note={day.note} setDay={setDay} ready={pct >= 1} />
 
-      <button className={'fab' + (hasNav ? ' with-nav' : '')} onClick={() => setQuick({})}><span>+</span>Ghi seeding</button>
+      <button className={'fab' + (hasNav ? ' with-nav' : '')} onClick={() => setQuick({})}><span>+</span>Thêm link</button>
       {quick && (
         <QuickAdd preset={quick} who={who} date={date} groups={groups} ideas={ideas} onClose={() => setQuick(null)}
           onSaved={(row) => { if (row) setDay((x) => ({ ...x, posts: [...x.posts, row] })); setQuick(null); load() }} />
@@ -250,7 +250,7 @@ function Feedback({ yday, seen, onSeen }) {
   const bad = rv.filter((r) => r.status === 'removed' || r.status === 'hidden').length
   return (
     <section className="card" id="s1">
-      <StepHead no={1} done={seen || !fb} title="Góp ý hôm qua" right={avg && `★ ${avg}/5`} hint="Bot đọc bài & comment hôm qua của bạn và góp ý mỗi sáng." />
+      <StepHead no={1} done={seen || !fb} title="Góp ý hôm qua" right={avg && `★ ${avg}/5`} hint="Mỗi sáng bot đọc bài đăng và bài trả lời hôm qua của bạn rồi góp ý." />
       {!fb && posts.length === 0 && (
         <div className="all-done"><Mascot who="kyky" pose="sleeping" className="" /><div className="sub">Hôm qua chưa có bài nào để chấm. Hôm nay mình làm thật tốt nhé!</div></div>
       )}
@@ -322,16 +322,16 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
   const done = openT.every((t) => t.taken_by) && !ideas.some((i) => !i.taken_by && i.assigned_to === who.id)
   return (
     <section className="card" id="s2">
-      <StepHead no={2} done={done && (shownT.length > 0 || ideas.length > 0)} title="Nhận việc" hint="Bấm “Mình nhận” / “Mình lấy” trước khi làm để không trùng với bạn khác." />
+      <StepHead no={2} done={done && (shownT.length > 0 || ideas.length > 0)} title="Nhận việc" hint="Bấm “Nhận” trước khi làm để không trùng với bạn khác." />
       <div className="seg" style={{ marginBottom: 12 }}>
-        <button className={tab === 'comment' ? 'on' : ''} onClick={() => setTab('comment')}>💬 Bài cần comment {newT > 0 && `(${newT})`}</button>
-        <button className={tab === 'post' ? 'on' : ''} onClick={() => setTab('post')}>💡 Gợi ý bài đăng {freeI > 0 && `(${freeI})`}</button>
+        <button className={tab === 'comment' ? 'on' : ''} onClick={() => setTab('comment')}>Bài cần trả lời {newT > 0 && <span className="count">{newT}</span>}</button>
+        <button className={tab === 'post' ? 'on' : ''} onClick={() => setTab('post')}>Ý tưởng bài đăng {freeI > 0 && <span className="count">{freeI}</span>}</button>
       </div>
 
       {tab === 'comment' && (
         <>
           {shownT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot vào group khoảng 3 tiếng một lần (8h, 11h, 14h, 17h, 20h) lấy mọi bài mới để mình vào trả lời. Có bài mới sẽ hiện thông báo ở đầu trang.</div></div>}
-          {shownT.length > 0 && <div className="list-count"><b>{newT}</b> bài chưa ai nhận · {openT.length - newT} đang làm · {doneT.length} đã comment hôm nay</div>}
+          {shownT.length > 0 && <div className="list-count"><b>{newT}</b> bài chưa ai nhận · {openT.length - newT} đang làm · {doneT.length} đã trả lời hôm nay</div>}
           <div className="ideas two scroll-list">
             {shownT.map((t) => {
               const cls = t.status === 'commented' ? ' mine' : t.taken_by && !mine(t) ? ' taken' : ''
@@ -345,17 +345,17 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
                   <div className="foot">
                     {(t.status === 'new' || (t.status === 'taken' && mine(t))) && (
                       <label className={'tick' + (busy === t.id ? ' busy' : '')}>
-                        <input type="checkbox" disabled={busy === t.id} onChange={() => run(t.id, () => api.completeTarget(t.id, t.url), 'Đã ghi: bạn đã comment vào bài này 🎉')} />
-                        Đã comment vào bài này
+                        <input type="checkbox" disabled={busy === t.id} onChange={() => run(t.id, () => api.completeTarget(t.id, t.url), 'Đã ghi. Cảm ơn bạn!')} />
+                        Đã trả lời bài này
                       </label>
                     )}
                     {t.status === 'new' && <>
-                      <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.takeTarget(t.id), 'Đã nhận')}>Mình nhận</button>
+                      <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.takeTarget(t.id), 'Đã nhận')}>Nhận bài</button>
                       <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'), 'Đã chuyển vào mục Đã bỏ qua')}>Bỏ qua</button>
                     </>}
                     {t.status === 'taken' && mine(t) && <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'new'))}>Trả lại</button>}
                     {t.status === 'taken' && !mine(t) && <span className="sub">{nameOf[t.taken_by] || 'Người khác'} đã nhận</span>}
-                    {t.status === 'commented' && <span className="ok">✓ {t.taken_by === me.id ? 'Bạn' : nameOf[t.taken_by]} đã comment vào bài này</span>}
+                    {t.status === 'commented' && <span className="ok">✓ {t.taken_by === me.id ? 'Bạn' : nameOf[t.taken_by]} đã trả lời bài này</span>}
                   </div>
                 </article>
               )
@@ -380,7 +380,7 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
 
       {tab === 'post' && (
         <>
-          {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có thẻ gợi ý. Khoảng 8h–8h30 sáng bot gom câu học viên hỏi thật trên chatbot web và Zalo 24h qua.</div></div>}
+          {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có ý tưởng bài đăng. Khoảng 8h–8h30 sáng bot lấy câu học viên hỏi trong Zalo, ai nhận rồi thì bot bù cho đủ 30.</div></div>}
           {ideas.length > 0 && <p className="mini ask-tip">Câu hỏi và câu trả lời <b>nguyên văn</b> trong Zalo. Viết bài từ nick/trang Kỳ Tích, không đăng lại như thể mình là người hỏi.</p>}
           {ideas.length > 0 && (
             <div className="itable">
@@ -438,7 +438,7 @@ function Tasks({ routines, day, setDay, checkOf, toggle, date, who, reload, done
   }
   return (
     <section className="card" id="s3">
-      <StepHead no={3} done={totalR > 0 && doneR >= totalR} title="Việc trong ngày" right={`${doneR}/${totalR}`} hint="Bấm ô vuông khi xong. Có thể ghi chú ngắn dưới mỗi việc." />
+      <StepHead no={3} done={totalR > 0 && doneR >= totalR} title="Việc hằng ngày" right={`${doneR}/${totalR}`} hint="Xong việc nào thì tích việc đó. Có thể ghi chú ngắn." />
       {routines.length === 0 && day.extras.length === 0 && <p className="empty">Chưa có việc cố định. Thiện thêm ở Cài đặt.</p>}
       {routines.map((r) => {
         const c = checkOf(r.id)
@@ -494,9 +494,9 @@ function SeedLog({ day, setDay, nPost, nCmt, qPost, qCmt, onAdd }) {
   )
   return (
     <section className="card" id="s-log">
-      <StepHead no={3} done={nPost >= qPost && nCmt >= qCmt} title="Seeding hôm nay" right={`${day.posts.length} link`} hint="Mỗi bài đăng / comment xong thì dán link vào đây." />
+      <StepHead no={3} done={nPost >= qPost && nCmt >= qCmt} title="Bài đã làm" right={`${day.posts.length} link`} hint="Đăng hoặc trả lời xong thì dán link vào đây." />
       <Bar label="Bài đăng" n={nPost} q={qPost} />
-      <Bar label="Comment" n={nCmt} q={qCmt} />
+      <Bar label="Bài trả lời" n={nCmt} q={qCmt} />
       <div className="rule">🚫 <b>Không đóng vai học viên.</b> Không chép nguyên tin nhắn Zalo của khách. Không dán link trơ trọi hay văn mẫu lặp lại. Đăng từ nick/trang Kỳ Tích hoặc trả lời câu hỏi thật.</div>
       {day.posts.length === 0 && <p className="empty">Chưa có link nào hôm nay.</p>}
       {day.posts.map((p, i) => (
@@ -510,7 +510,7 @@ function SeedLog({ day, setDay, nPost, nCmt, qPost, qCmt, onAdd }) {
           <button className="x" aria-label="Xoá" onClick={() => remove(p)}>×</button>
         </div>
       ))}
-      <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onAdd}>+ Ghi bài / comment</button>
+      <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onAdd}>+ Thêm link</button>
     </section>
   )
 }
@@ -578,7 +578,7 @@ function QuickAdd({ preset, who, date, groups, ideas, onClose, onSaved }) {
     try {
       if (target) {
         await api.completeTarget(target.id, u)
-        notify('Đã ghi comment 🎉')
+        notify('Đã ghi. Cảm ơn bạn!')
         return onSaved(null)
       }
       const g = groups.find((x) => x.id === groupId)
@@ -596,7 +596,7 @@ function QuickAdd({ preset, who, date, groups, ideas, onClose, onSaved }) {
       <form onSubmit={save}>
         <div className="sheet-h">
           <Mascot who="kyky" pose={target ? 'checklist' : 'idea'} className="" />
-          <div><h2>{target ? 'Đã comment xong?' : 'Ghi seeding'}</h2><div className="sub">{target ? 'Dán link comment của bạn vào bài này' : 'Dán link, mình tự nhận ra loại và group'}</div></div>
+          <div><h2>{target ? 'Đã trả lời xong?' : 'Thêm link'}</h2><div className="sub">{target ? 'Dán link bài trả lời của bạn' : 'Dán link, web tự nhận ra loại bài và group'}</div></div>
         </div>
         {target && <div className="form-box" style={{ marginTop: 0, marginBottom: 12 }}><b>{target.question}</b><div className="sub">{target.group_name}</div></div>}
         {!target && (
@@ -637,7 +637,7 @@ function QuickAdd({ preset, who, date, groups, ideas, onClose, onSaved }) {
             )}
             {kind === 'post' && ideas.length > 0 && (
               <div className="field">
-                <label>Viết từ thẻ gợi ý nào <span className="sub">(tuỳ chọn)</span></label>
+                <label>Viết từ ý tưởng nào <span className="sub">(tuỳ chọn)</span></label>
                 <select className="input" value={ideaId} onChange={(e) => setIdeaId(e.target.value)}>
                   <option value="">— Không —</option>
                   {(myIdeas.length ? myIdeas : ideas).map((i) => <option key={i.id} value={i.id}>{i.topic}</option>)}

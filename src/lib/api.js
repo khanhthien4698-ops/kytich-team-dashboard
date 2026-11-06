@@ -137,7 +137,7 @@ export const answerTarget = (id, text) => q(sb.rpc('answer_target', { p_target: 
 // Kho ý tưởng chung: 30 câu chưa ai lấy + các câu đang/đã đăng trong 7 ngày
 export async function listIdeaPool(today) {
   const [free, taken] = await Promise.all([
-    q(sb.from('seed_ideas').select('*').is('taken_by', null).is('skipped_at', null).order('created_at').limit(30)),
+    q(sb.from('seed_ideas').select('*').is('taken_by', null).is('skipped_at', null).like('angle', 'meta:%').order('created_at', { ascending: false }).limit(30)),
     q(sb.from('seed_ideas').select('*').gte('taken_at', addDays(today, -7) + 'T00:00:00+07:00').order('taken_at', { ascending: false })),
   ])
   return { free, taken }

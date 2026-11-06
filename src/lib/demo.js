@@ -113,6 +113,7 @@ class Query {
   is(c, v) { this.filters.push((r) => (r[c] ?? null) === v); return this }
   ilike(c, v) { this.filters.push((r) => (r[c] || '').toLowerCase() === v.toLowerCase()); return this }
   order(c, o = {}) { this.orders.push([c, o.ascending !== false]); return this }
+  like(c, v) { const re = new RegExp('^' + v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*') + '$'); this.filters.push((r) => re.test(r[c] || '')); return this }
   limit() { return this }
   insert(p) { this.op = 'insert'; this.payload = p; return this }
   update(p) { this.op = 'update'; this.payload = p; return this }

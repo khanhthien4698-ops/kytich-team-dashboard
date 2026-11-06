@@ -701,3 +701,8 @@ details.more summary { color: var(--ink-2); font-weight: 600; }
 .theme-pick { display: flex; gap: 4px; padding: 6px 10px 8px; }
 .theme-pick button { flex: 1; padding: 6px 4px !important; text-align: center !important; border: 1px solid var(--line) !important; border-radius: 8px; font-size: 12px; }
 .theme-pick button.on { border-color: var(--red) !important; color: var(--red); }
+.seedform { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 4px; }
+.seedform .input { min-height: 36px; font-size: 13px; }
+.seedform textarea.input { min-height: 56px; }
+.tcard .tlink { color: var(--ink); text-decoration: none; word-break: normal; }
+.tcard .tlink:hover { color: var(--red); text-decoration: underline; }

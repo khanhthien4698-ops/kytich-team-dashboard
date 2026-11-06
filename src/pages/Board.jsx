@@ -89,7 +89,7 @@ export default function Board({ me, onOpen }) {
 
   // "Vừa làm": bài đăng / bài trả lời / bỏ qua ý tưởng hôm nay, mới nhất trước
   const feed = [
-    ...data.posts.filter((p) => p.date === today).map((p) => ({ at: p.created_at, who: p.member_id, t: p.kind === 'post' ? 'đăng bài' : 'trả lời bài', s: p.question || null, g: p.group_name, url: p.url })),
+    ...data.posts.filter((p) => p.date === today).map((p) => ({ at: p.created_at, who: p.member_id, t: p.kind === 'post' ? 'seeding bài' : 'trả lời bài', s: p.question || null, g: p.group_name, url: p.url })),
     ...extra.skipped.map((i) => ({ at: i.skipped_at, who: i.skipped_by, t: 'bỏ qua ý tưởng', s: i.question })),
   ].filter((x) => x.at).sort((a, b) => (b.at > a.at ? 1 : -1)).slice(0, 12)
 
@@ -111,7 +111,7 @@ export default function Board({ me, onOpen }) {
             <div className="hero-hello">{greet()} · {longDate(today)}</div>
             <h1>Cả đội hôm nay xong {Math.round(teamPct * 100)}%</h1>
             <div className="summary">
-              <span>Đã đăng <b>{sum('a')}/{sum('b')}</b> bài</span>
+              <span>Đã seeding <b>{sum('a')}/{sum('b')}</b> bài</span>
               <span>Đã trả lời <b>{sum('c')}/{sum('d')}</b> bài</span>
               <span>Còn <b>{leftT}</b> bài cần trả lời</span>
               <span>Kho ý tưởng còn <b>{extra.freeIdeas}</b> câu</span>
@@ -134,7 +134,7 @@ export default function Board({ me, onOpen }) {
                 <div className="pct">{Math.round(s.pct * 100)}%</div>
               </div>
               <div className="pnums">
-                <div className="pnum"><div className="lbl">Bài đăng</div><div className="v">{s.a}<small> / {s.b}</small></div></div>
+                <div className="pnum"><div className="lbl">Bài seeding</div><div className="v">{s.a}<small> / {s.b}</small></div></div>
                 <div className="pnum"><div className="lbl">Bài trả lời</div><div className="v">{s.c}<small> / {s.d}</small></div></div>
                 <div className="pnum"><div className="lbl">Điểm bot 7 ngày</div><div className="v">{a ? '★ ' + a.toFixed(1).replace('.', ',') : '—'}</div></div>
               </div>

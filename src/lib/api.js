@@ -147,6 +147,8 @@ export async function countFreeIdeas() {
   if (error) throw new Error(error.message)
   return count ?? data?.length ?? 0
 }
+// Sửa link của dòng seeding (chủ dòng hoặc admin)
+export const updatePostUrl = (id, url) => q(sb.from('seeding_posts').update({ url }).eq('id', id))
 export const skipIdea = (id) => q(sb.rpc('skip_idea', { p_idea: id }))
 export const listSkippedIdeasSince = (since) =>
   q(sb.from('seed_ideas').select('id,question,skipped_by,skipped_at').gte('skipped_at', since).order('skipped_at', { ascending: false }))

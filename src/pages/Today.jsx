@@ -32,7 +32,7 @@ export default function Today({ me, hasNav, viewId, onView }) {
   const whoId = viewId || me.id
   const [d, setD] = useState(null)
   const [quick, setQuick] = useState(null) // { kind, ideaId, target }
-  const [pickTab, setPickTab] = useState('post')
+  const [pickTab, setPickTab] = useState('comment')
   const [seenAt, setSeenAt] = useState('')
   const who = members.find((m) => m.id === whoId) || me
   // Xem việc của người khác: chỉ xem, không bấm được (trừ admin)
@@ -106,6 +106,15 @@ export default function Today({ me, hasNav, viewId, onView }) {
   }
   const firstName = shortName(who.name)
 
+  // ---- Việc cần làm (ngắn, mỗi dòng 1 việc) ----
+  const todo = []
+  const goTab = (t) => { setPickTab(t); scrollToId('seeding') }
+  if (nCmt < qCmt) todo.push({ ic: '💬', t: `Seeding thêm ${qCmt - nCmt} bài cần trả lời`, s: `Còn ${leftT} bài giao cho ${who.id === me.id ? 'bạn' : firstName}`, btn: 'Xem bài', go: () => goTab('comment') })
+  if (nPost < qPost) todo.push({ ic: '📝', t: `Seeding thêm ${qPost - nPost} bài từ ý tưởng`, s: `Kho còn ${pool.free.length} ý tưởng`, btn: 'Xem ý tưởng', go: () => goTab('post') })
+  if (yday.fb && !fbSeen) todo.push({ ic: '⭐', t: 'Đọc góp ý của bot cho hôm qua', s: yday.fb.text.slice(0, 80) + (yday.fb.text.length > 80 ? '…' : ''), btn: 'Đọc', go: () => { store.set(fbKey, '1'); scrollToId('s1'); load() } })
+  const undone = routines.find((r) => !checkOf(r.id)?.done)
+  if (undone) todo.push({ ic: '☑️', t: undone.title, s: 'Việc hằng ngày', btn: 'Xong', go: () => toggle(undone, { done: true }) })
+
   return (
     <>
       {/* ---- Đầu trang: 1 dòng tóm tắt ---- */}
@@ -116,7 +125,7 @@ export default function Today({ me, hasNav, viewId, onView }) {
             <h1>{who.id === me.id ? `Chào ${firstName}, hôm nay bạn xong ${Math.round(pct * 100)}%` : `${who.name} hôm nay xong ${Math.round(pct * 100)}%`}</h1>
             <div className="bar hero-bar"><span style={{ width: Math.round(pct * 100) + '%' }} /></div>
             <div className="summary">
-              <span>Đã đăng <b>{nPost}/{qPost}</b> bài</span>
+              <span>Đã seeding <b>{nPost}/{qPost}</b> bài</span>
               <span>Đã trả lời <b>{nCmt}/{qCmt}</b> bài</span>
               <span>Còn <b>{leftT}</b> bài cần trả lời</span>
               {yAvg && <span>Điểm bot hôm qua <b>★ {yAvg.toFixed(1).replace('.', ',')}</b></span>}
@@ -137,6 +146,21 @@ export default function Today({ me, hasNav, viewId, onView }) {
           <button className="btn sm" onClick={seeFresh}>Xem ngay</button>
         </section>
       )}
+
+      <section className="card">
+        <div className="card-h"><h2>Việc cần làm</h2>{todo.length > 0 && <span className="count">{todo.length} việc</span>}</div>
+        {todo.length === 0 ? <p className="empty">Xong hết rồi. Đủ việc, đủ bài seeding hôm nay.</p> : (
+          <div className="next">
+            {todo.map((n, i) => (
+              <div key={i} className={'next-item' + (i === 0 ? ' first' : '')}>
+                <span className="next-ic">{n.ic}</span>
+                <div className="next-txt">{n.t}{n.s && <span className="sub">{n.s}</span>}</div>
+                {!readOnly && <button className={'btn sm' + (i === 0 ? '' : ' ghost')} onClick={n.go}>{n.btn}</button>}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <Seeding tab={pickTab} setTab={setPickTab} seenAt={seenAt} who={who} me={me} readOnly={readOnly} targets={targets} pool={pool}
         teamPosts={teamPosts} groups={groups} nameOf={nameOf} date={date} nPost={nPost} qPost={qPost} nCmt={nCmt} qCmt={qCmt} reload={load} />
@@ -232,107 +256,68 @@ function ideaMeta(i) {
 function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPosts, groups, nameOf, date, nPost, qPost, nCmt, qCmt, reload }) {
   const notify = useToast()
   const [busy, setBusy] = useState(null)
+  const [openForm, setOpenForm] = useState(null) // id của dòng đang mở ô nhập
   const run = async (id, fn, ok) => {
     setBusy(id)
     try { await fn(); if (ok) notify(ok) } catch (x) { notify(x.message, true) }
     await reload(); setBusy(null)
   }
-  const nm = (id) => (id === who.id ? (who.id === me.id ? 'Bạn' : shortName(who.name)) : shortName(nameOf[id] || 'Người khác'))
+  const nm = (id) => (id === me.id ? 'Bạn' : shortName(nameOf[id] || 'Người khác'))
+  const done = () => { setOpenForm(null); reload() }
 
-  // ---- Ý tưởng đăng bài ----
+  // ---- Ý tưởng seeding: 30 câu chưa ai làm + câu đã seeding hôm nay ----
   const postOf = Object.fromEntries(teamPosts.filter((p) => p.idea_id).map((p) => [p.idea_id, p]))
-  const doing = pool.taken.filter((i) => !postOf[i.id])
   const doneToday = pool.taken.filter((i) => postOf[i.id] && postOf[i.id].date === date)
-  const ideaRows = [...doing.filter((i) => i.taken_by === who.id), ...pool.free, ...doing.filter((i) => i.taken_by !== who.id), ...doneToday]
+  const ideaRows = [...pool.free, ...doneToday]
 
   // ---- Bài cần trả lời ----
-  const openT = targets.filter((t) => t.status === 'new' || t.status === 'taken')
-    .sort((a, b) => rank(b) - rank(a) || (b.created_at > a.created_at ? 1 : -1))
-  function rank(t) { return (t.taken_by === who.id ? 4 : 0) + (t.assigned_to === who.id ? 2 : 0) + (t.status === 'new' ? 1 : 0) }
+  const rank = (t) => (t.taken_by === who.id ? 4 : 0) + (t.assigned_to === who.id ? 2 : 0) + (t.status === 'new' ? 1 : 0)
+  const openT = targets.filter((t) => t.status === 'new' || t.status === 'taken').sort((a, b) => rank(b) - rank(a) || (b.created_at > a.created_at ? 1 : -1))
   const doneT = targets.filter((t) => t.status === 'commented' && (vnDate(t.taken_at) || t.date) === date)
   const skippedT = targets.filter((t) => t.status === 'skipped')
-  const myOpen = openT.filter((t) => (t.status === 'new' && t.assigned_to === who.id) || t.taken_by === who.id).length
-  const take = (t) => {
-    window.open(t.url, '_blank', 'noopener') // mở luôn bài gốc
-    run(t.id, () => api.takeTarget(t.id), 'Đã nhận. Trả lời xong thì dán câu bạn đã comment vào ô bên dưới.')
-  }
+  const myOpen = openT.filter((t) => t.assigned_to === who.id || t.taken_by === who.id).length
+  const canAct = (t) => t.status === 'new' || (t.status === 'taken' && t.taken_by === who.id)
+  const you = who.id === me.id ? 'Bạn' : shortName(who.name)
 
   return (
     <section className="card zone" id="seeding">
-      <div className="card-h"><h2>Seeding</h2><span className="sub">Chỉ đăng ở Key Aptis miễn phí và Hội review đề Aptis có tâm</span></div>
+      <div className="card-h"><h2>Việc cần seeding</h2><span className="sub">Chỉ seeding ở Key Aptis miễn phí và Hội review đề Aptis có tâm</span></div>
       <div className="seg">
-        <button className={tab === 'post' ? 'on' : ''} onClick={() => setTab('post')}>Ý tưởng đăng bài <span className="count">{pool.free.length}</span></button>
         <button className={tab === 'comment' ? 'on' : ''} onClick={() => setTab('comment')}>Bài cần trả lời {myOpen > 0 && <span className="count">{myOpen}</span>}</button>
+        <button className={tab === 'post' ? 'on' : ''} onClick={() => setTab('post')}>Ý tưởng seeding <span className="count">{pool.free.length}</span></button>
       </div>
-
-      {tab === 'post' && (
-        <>
-          <div className="list-count">{who.id === me.id ? 'Bạn' : shortName(who.name)} đã đăng <b>{nPost}/{qPost}</b> bài hôm nay. Câu hỏi và câu trả lời nguyên văn trong Zalo: viết bài từ trang Kỳ Tích, đừng đóng vai người hỏi.</div>
-          {ideaRows.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Kho ý tưởng đang trống. Bot nạp câu hỏi Zalo mỗi sáng khoảng 8h.</div></div>}
-          {ideaRows.length > 0 && (
-            <div className="itable">
-              <div className="irow ihead"><span>Câu hỏi</span><span>Câu trả lời</span><span>Người đăng</span><span></span></div>
-              {ideaRows.map((i) => {
-                const ans = ideaMeta(i)?.ans || ''
-                const post = postOf[i.id]
-                const mineDoing = !post && i.taken_by === who.id
-                return (
-                  <div key={i.id} className={'irow' + (post ? ' got' : i.taken_by ? ' doing' : '')}>
-                    <div className="icell iq" data-l="Câu hỏi"><Clamp text={i.question || i.topic} lines={4} /></div>
-                    <div className="icell ians" data-l="Câu trả lời">{ans ? <Clamp text={ans} lines={4} /> : <span className="sub">—</span>}</div>
-                    <div className="iwho">
-                      {post ? <><span className="iwho-got">✓ {nm(i.taken_by)} đã đăng</span><a className="mini" href={post.url} target="_blank" rel="noreferrer">{post.group_name || 'xem bài'} ↗</a></>
-                        : i.taken_by ? <span className="iwho-doing">● {nm(i.taken_by)} đang đăng</span>
-                        : <span className="sub">Chưa ai lấy</span>}
-                      {mineDoing && !readOnly && <PostLink idea={i} who={who} date={date} groups={groups} onDone={reload} />}
-                    </div>
-                    <div className="iact">
-                      {!i.taken_by && !readOnly && <>
-                        <button className="btn sm" disabled={busy === i.id} onClick={() => run(i.id, () => api.takeIdea(i.id), 'Đăng xong thì dán link vào ô bên dưới câu này.')}>Đăng câu này</button>
-                        <button className="btn sm ghost" disabled={busy === i.id} onClick={() => run(i.id, () => api.skipIdea(i.id))}>Bỏ qua</button>
-                      </>}
-                      {mineDoing && !readOnly && <button className="linkbtn" disabled={busy === i.id} onClick={() => run(i.id, () => api.releaseIdea(i.id))}>Trả lại</button>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </>
-      )}
 
       {tab === 'comment' && (
         <>
-          <div className="list-count">{who.id === me.id ? 'Bạn' : shortName(who.name)} đã trả lời <b>{nCmt}/{qCmt}</b> bài hôm nay · bot chia bài theo chỉ tiêu (An 5 · Châu 10)</div>
+          <div className="list-count">{you} đã trả lời <b>{nCmt}/{qCmt}</b> bài hôm nay. Bấm vào nội dung bài để mở bài gốc.</div>
           {openT.length + doneT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot vào group khoảng 3 tiếng một lần, có bài mới sẽ báo ở đầu trang.</div></div>}
           <div className="ideas two scroll-list">
             {[...openT, ...doneT].map((t) => {
-              const mine = t.taken_by === who.id
               const forMe = t.assigned_to === who.id
               return (
-                <article key={t.id} className={'idea tcard' + (t.status === 'commented' ? ' mine' : t.taken_by && !mine ? ' taken' : mine ? ' open' : '')}>
+                <article key={t.id} className={'idea tcard' + (t.status === 'commented' ? ' mine' : t.taken_by && t.taken_by !== who.id ? ' taken' : '')}>
                   <div className="idea-top">
                     <span className="sub">{t.group_name} · {ddmm(t.date)}</span>
-                    {t.assigned_to && <span className={'chip ' + (forMe ? 'mine' : '')}>{forMe ? (who.id === me.id ? 'Giao cho bạn' : 'Giao cho ' + shortName(who.name)) : 'Giao cho ' + shortName(nameOf[t.assigned_to] || '')}</span>}
+                    {t.assigned_to && <span className={'chip ' + (forMe ? 'mine' : '')}>Giao cho {forMe ? (who.id === me.id ? 'bạn' : shortName(who.name)) : shortName(nameOf[t.assigned_to] || '')}</span>}
                     {t.status === 'new' && t.created_at > seenAt && <span className="chip new">Mới</span>}
-                    <span className={'chip ' + (t.status === 'commented' ? 'ok' : t.status === 'taken' ? 'warn' : '')}>{t.status === 'taken' ? nm(t.taken_by) + ' đã nhận' : T_STATUS[t.status]}</span>
+                    {t.status === 'commented' && <span className="chip ok">Đã seeding</span>}
                   </div>
-                  <div className="tbody" title={t.question}>{t.question}</div>
+                  <a className="tbody tlink" href={t.url} target="_blank" rel="noreferrer" title="Mở bài gốc">{t.question}</a>
                   {t.angle && <div className="kv"><b>Gợi ý trả lời:</b> {t.angle}</div>}
-                  {t.status === 'taken' && mine && <a href={t.url} target="_blank" rel="noreferrer" className="kv topen">{t.url.replace(/^https?:\/\/(www\.)?/, '')} ↗</a>}
                   {t.status === 'commented' && (
-                    <div className="said">✓ {nm(t.taken_by)} đã trả lời{t.comment_text && <>: <b>“{t.comment_text}”</b></>} · bot kiểm tra sáng mai</div>
+                    <div className="said">✓ {nm(t.taken_by)} đã seeding{t.comment_text && <>: <b>“{t.comment_text}”</b></>} · bot kiểm tra sáng mai</div>
                   )}
-                  {!readOnly && (
-                    <div className="foot">
-                      {t.status === 'new' && <>
-                        <button className={'btn sm' + (forMe || !t.assigned_to ? '' : ' ghost')} disabled={busy === t.id} onClick={() => take(t)}>{forMe || !t.assigned_to ? 'Nhận bài' : 'Nhận thay ' + shortName(nameOf[t.assigned_to] || '')}</button>
-                        {(forMe || !t.assigned_to || me.role === 'admin') && <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'), 'Đã bỏ qua')}>Bỏ qua</button>}
-                      </>}
-                      {t.status === 'taken' && mine && <AnswerBox t={t} onDone={reload} />}
-                      {t.status === 'taken' && !mine && <span className="sub">{nm(t.taken_by)} đang làm</span>}
-                    </div>
-                  )}
+                  {t.status === 'taken' && t.taken_by !== who.id && <div className="sub">{nm(t.taken_by)} đang làm</div>}
+                  {!readOnly && canAct(t) && (openForm === t.id
+                    ? <SeedForm withText onCancel={() => setOpenForm(null)} onSave={async (url, text) => {
+                        const pid = await api.answerTarget(t.id, text)
+                        if (url && pid) await api.updatePostUrl(pid, url)
+                        notify('Đã ghi. Cảm ơn bạn!'); done()
+                      }} />
+                    : <div className="foot">
+                        <button className="btn sm" onClick={() => setOpenForm(t.id)}>Đã seeding</button>
+                        <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'), 'Đã bỏ qua')}>Bỏ qua</button>
+                      </div>)}
                 </article>
               )
             })}
@@ -350,60 +335,85 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
           )}
         </>
       )}
+
+      {tab === 'post' && (
+        <>
+          <div className="list-count">{you} đã seeding <b>{nPost}/{qPost}</b> bài hôm nay. Câu hỏi và câu trả lời nguyên văn trong Zalo: viết bài từ trang Kỳ Tích, đừng đóng vai người hỏi.</div>
+          {ideaRows.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Kho ý tưởng đang trống. Bot nạp câu hỏi Zalo mỗi sáng khoảng 8h.</div></div>}
+          {ideaRows.length > 0 && (
+            <div className="itable">
+              <div className="irow ihead"><span>Câu hỏi</span><span>Câu trả lời</span><span></span><span></span></div>
+              {ideaRows.map((i) => {
+                const ans = ideaMeta(i)?.ans || ''
+                const post = postOf[i.id]
+                return (
+                  <div key={i.id} className={'irow' + (post ? ' got' : openForm === i.id ? ' doing' : '')}>
+                    <div className="icell iq" data-l="Câu hỏi"><Clamp text={i.question || i.topic} lines={4} /></div>
+                    <div className="icell ians" data-l="Câu trả lời">{ans ? <Clamp text={ans} lines={4} /> : <span className="sub">—</span>}</div>
+                    <div className="iwho">
+                      {post && <><span className="iwho-got">✓ {nm(post.member_id)} đã seeding</span><a className="mini" href={post.url} target="_blank" rel="noreferrer">{post.group_name || 'xem bài'} ↗</a></>}
+                      {!post && !readOnly && openForm === i.id && (
+                        <SeedForm groups={groups} onCancel={() => setOpenForm(null)} onSave={async (url, _t, g) => {
+                          await api.takeIdea(i.id)
+                          await api.addPost({ date, member_id: who.id, url, group_id: g.id, group_name: g.name, kind: 'post', idea_id: i.id })
+                          notify('Đã ghi. Cảm ơn bạn!'); done()
+                        }} />
+                      )}
+                    </div>
+                    <div className="iact">
+                      {!post && !readOnly && openForm !== i.id && <>
+                        <button className="btn sm" onClick={() => setOpenForm(i.id)}>Đã seeding</button>
+                        <button className="btn sm ghost" disabled={busy === i.id} onClick={() => run(i.id, () => api.skipIdea(i.id))}>Bỏ qua</button>
+                      </>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
     </section>
   )
 }
 
-// Dán link bài đã đăng ngay dưới câu ý tưởng (chỉ nhận 2 group được phép)
-function PostLink({ idea, who, date, groups, onDone }) {
+// Ô nhập khi bấm "Đã seeding": link (+ nội dung đã comment với bài cần trả lời)
+function SeedForm({ withText, groups, onSave, onCancel }) {
   const notify = useToast()
-  const allowed = groups.filter((g) => POST_GROUPS.includes(g.name))
   const [url, setUrl] = useState('')
+  const [text, setText] = useState('')
   const [gid, setGid] = useState('')
   const [busy, setBusy] = useState(false)
-  const det = /^https?:\/\//i.test(url.trim()) ? detectLink(url.trim(), groups) : null
+  const allowed = (groups || []).filter((g) => POST_GROUPS.includes(g.name))
+  const det = groups && /^https?:\/\//i.test(url.trim()) ? detectLink(url.trim(), groups) : null
   async function save(e) {
     e.preventDefault()
     const u = url.trim()
-    if (!/^https?:\/\/\S+$/i.test(u)) return notify('Link chưa đúng. Dán link bắt đầu bằng https://', true)
-    const g = det?.group || allowed.find((x) => x.id === gid)
-    if (det?.group && !POST_GROUPS.includes(det.group.name)) return notify('Chỉ đăng ở Key Aptis miễn phí hoặc Hội review đề Aptis có tâm.', true)
-    if (!g) return notify('Chọn group bạn đã đăng.', true)
+    if (!/^https?:\/\/\S+$/i.test(u)) return notify('Dán link seeding, bắt đầu bằng https://', true)
+    if (withText && text.trim().length < 5) return notify('Dán nội dung bạn đã seeding.', true)
+    let g = null
+    if (groups) {
+      if (det?.group && !POST_GROUPS.includes(det.group.name)) return notify('Chỉ seeding ở Key Aptis miễn phí hoặc Hội review đề Aptis có tâm.', true)
+      g = det?.group || allowed.find((x) => x.id === gid)
+      if (!g) return notify('Chọn group bạn đã seeding.', true)
+    }
     setBusy(true)
-    try { await api.addPost({ date, member_id: who.id, url: u, group_id: g.id, group_name: g.name, kind: 'post', idea_id: idea.id }); notify('Đã ghi. Cảm ơn bạn!'); onDone() }
-    catch (x) { notify(x.message, true); setBusy(false) }
+    try { await onSave(u, text.trim(), g) } catch (x) { notify(x.message, true); setBusy(false) }
   }
   return (
-    <form className="pastebox" onSubmit={save}>
-      <input className="input" placeholder="Dán link bài đã đăng" value={url} onChange={(e) => setUrl(e.target.value)} />
-      {det && !det.group && (
+    <form className="seedform" onSubmit={save}>
+      <input className="input" placeholder="Dán link seeding" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
+      {groups && det && !det.group && (
         <select className="input" value={gid} onChange={(e) => setGid(e.target.value)}>
-          <option value="">Đăng ở group nào?</option>
+          <option value="">Seeding ở group nào?</option>
           {allowed.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
       )}
-      <button className="btn sm" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>
-    </form>
-  )
-}
-
-// Trả lời xong: dán câu đã comment để bot kiểm tra
-function AnswerBox({ t, onDone }) {
-  const notify = useToast()
-  const [v, setV] = useState('')
-  const [busy, setBusy] = useState(false)
-  async function save(e) {
-    e.preventDefault()
-    if (v.trim().length < 5) return notify('Dán câu bạn đã comment vào bài này.', true)
-    setBusy(true)
-    try { await api.answerTarget(t.id, v.trim()); notify('Đã ghi. Cảm ơn bạn!'); onDone() }
-    catch (x) { notify(x.message, true); setBusy(false) }
-  }
-  return (
-    <form className="cmtbox" onSubmit={save}>
-      <textarea className="input" placeholder="Dán câu bạn đã comment vào bài này" value={v} onChange={(e) => setV(e.target.value)} />
-      <button className="btn sm" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>
-      <button type="button" className="linkbtn" onClick={() => api.setTargetStatus(t.id, 'new').then(onDone)}>Trả lại</button>
+      {withText && <textarea className="input" placeholder="Dán nội dung bạn đã seeding" value={text} onChange={(e) => setText(e.target.value)} />}
+      <div className="row">
+        <button className="btn sm" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>
+        <button type="button" className="btn sm ghost" onClick={onCancel}>Huỷ</button>
+      </div>
     </form>
   )
 }

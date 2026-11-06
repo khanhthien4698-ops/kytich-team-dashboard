@@ -22,6 +22,7 @@
 //   node scripts/bot.mjs bv-get [tasks|ideas|focus|reports|days|meta] [--id ID]  # Bàn việc của Thiện: in JSON [{col,id,data}]
 //   node scripts/bot.mjs bv-put --file x.json [--merge]  # ghi Bàn việc: [{col,id,data}] (hoặc file xuất {tasks:[{id,data}],...}); --merge = chỉ đè các trường gửi lên
 //   node scripts/bot.mjs bv-del --col tasks --id ID [--id ID2]  # xoá hẳn bản ghi Bàn việc (luật dọn việc xong quá 14 ngày)
+//   node scripts/bot.mjs tien-do [--chot]  # in tin tiến độ seeding hôm nay của từng người (cho Telegram 10h/16h/21h); --chot thêm dòng chốt ngày
 //   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
 //   Mọi lượt dùng chung Facebook nên không chạy chồng nhau. scan in "GO since=<ISO>" = lần đọc group gần nhất.
@@ -133,7 +134,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 30).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 31).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -317,6 +318,35 @@ async function main() {
     const rows = picks.map((k) => ({ date: today, topic: k.topic, question: k.q, angle: 'meta:' + JSON.stringify({ src: 'zalo', at: ddmmhh(k.at), n: k.times, ans: k.a }), gift_doc: null, assigned_to: null }))
     for (let i = 0; i < rows.length; i += 200) await q(sb.from('seed_ideas').insert(rows.slice(i, i + 200)))
     console.log(`OK: nạp ${rows.length} câu (${fresh.length} câu mới), kho trên dashboard giờ có ${freeNow + rows.length} câu trống.`)
+  } else if (cmd === 'tien-do') {
+    // Số liệu giống trang Cả đội: bài seeding hôm nay / seeding_quota; bài cần trả lời = bài ở 2 group seeding,
+    // từ 05/11, còn mở và đang giao cho người đó (bài trả lời không có chỉ tiêu, phải trả lời hết)
+    const today = vnToday()
+    const GROUPS = ['Key Aptis miễn phí - update liên tục', 'Hội review đề Aptis có tâm'], FROM = '2026-11-05'
+    const staff = members.filter((m) => m.role === 'staff' && m.active && !/^Thành viên \d/.test(m.name))
+    const posts = await q(sb.from('seeding_posts').select('member_id,kind').eq('date', today))
+    const open = (await q(sb.from('seed_targets').select('group_name,date,status,assigned_to,taken_by').in('status', ['new', 'taken'])))
+      .filter((t) => GROUPS.includes(t.group_name) && t.date >= FROM)
+    const hour = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hourCycle: 'h23' }).format(new Date())
+    const [, mm, dd] = today.split('-')
+    const lines = [`📊 Seeding ${Number(hour)}h · ${dd}/${mm}`], warn = [], du = [], thieu = []
+    let conDang = 0, conTL = 0
+    for (const m of staff) {
+      const mine = posts.filter((p) => p.member_id === m.id)
+      const dang = mine.filter((p) => p.kind === 'post').length, tl = mine.filter((p) => p.kind === 'comment').length
+      const qd = m.seeding_quota || 0, cd = Math.max(0, qd - dang)
+      const ct = open.filter((t) => (t.status === 'new' && t.assigned_to === m.id) || (t.status === 'taken' && t.taken_by === m.id)).length
+      conDang += cd; conTL += ct
+      const ok = cd === 0 && ct === 0
+      lines.push(`${ok ? '✅ ' : ''}${m.name}: đăng ${dang}/${qd}${cd ? ` (còn ${cd})` : ''} · đã trả lời ${tl}${ct ? `, còn ${ct} bài chưa trả lời` : ', hết bài cần trả lời'}`)
+      if (!dang && !tl) warn.push(`⚠️ ${m.name} chưa làm bài nào hôm nay`)
+      ;(ok ? du : thieu).push(ok ? m.name : `${m.name} còn ${[cd && cd + ' bài đăng', ct && ct + ' bài trả lời'].filter(Boolean).join(', ')}`)
+    }
+    const chuaGiao = open.filter((t) => t.status === 'new' && !t.assigned_to).length
+    lines.push(`Cả đội: còn ${conDang} bài đăng · ${conTL} bài trả lời${chuaGiao ? ` · ${chuaGiao} bài chưa giao ai` : ''}`)
+    lines.push(...warn)
+    if (a.chot) lines.push(`Chốt ngày: ${du.length ? 'đủ chỉ tiêu: ' + du.join(', ') : 'chưa ai đủ chỉ tiêu'}${thieu.length ? '. Thiếu: ' + thieu.join('; ') : ''}`)
+    console.log(lines.slice(0, 8).join('\n'))
   } else if (cmd === 'bv-get') {
     const COLS = ['tasks', 'ideas', 'focus', 'reports', 'days', 'meta']
     const col = a._[1]

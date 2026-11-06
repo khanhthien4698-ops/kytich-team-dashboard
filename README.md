@@ -1,4 +1,4 @@
-# Dashboard đội nhóm Kỳ Tích
+# Dashboard Team Aptis Kỳ Tích
 
 Bảng việc chung của team: nhân viên tick việc hằng ngày, ghi bài seeding, nhận thẻ gợi ý nội dung; Thiện xem Bảng tổng 7 ngày và cài đặt. Bot 8h sáng ghi báo cáo + thẻ gợi ý.
 

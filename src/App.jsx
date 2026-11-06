@@ -92,7 +92,7 @@ function Shell({ me }) {
     <>
       <header className="topbar">
         <div className="topbar-in">
-          <div className="brand"><span className="logo">KT</span><div>Đội nhóm Kỳ Tích<small>Aptis Kỳ Tích</small></div></div>
+          <div className="brand"><span className="logo">KT</span><div>Team Aptis Kỳ Tích<small>Bảng việc của team</small></div></div>
           <nav className="nav">
             {TABS.map((t) => <button key={t.id} className={tab === t.id && !(t.id === 'today' && viewId) ? 'on' : ''} onClick={() => go(t.id)}>{t.label}</button>)}
           </nav>
@@ -103,6 +103,8 @@ function Shell({ me }) {
           {menu && (
             <div className="menu" onMouseLeave={() => setMenu(false)}>
               <div className="who"><b>{me.name}</b><div className="sub">{isAdmin ? 'Quản lý' : 'Thành viên'}</div></div>
+              <div className="mini" style={{ padding: '6px 10px 0' }}>Giao diện</div>
+              <ThemePick />
               <button onClick={() => { setMenu(false); setTour(true) }}>📖 Xem hướng dẫn</button>
               <button onClick={() => { setMenu(false); setPwOpen(true) }}>🔑 Đổi mật khẩu</button>
               <button onClick={signOut}>↩︎ Đăng xuất</button>
@@ -145,7 +147,7 @@ function Login() {
           <Mascot who="kyky" pose="waving" className="" />
           <Mascot who="tichtich" pose="cheer" className="" />
         </div>
-        <h1>Đội nhóm Kỳ Tích</h1>
+        <h1>Team Aptis Kỳ Tích</h1>
         <p className="sub">Bảng việc chung của team. Đăng nhập bằng tài khoản Thiện cấp.</p>
         <div className="field">
           <label>Tên đăng nhập</label>
@@ -202,5 +204,20 @@ function NotConfigured() {
       <h1>Chưa kết nối Supabase</h1>
       <p className="sub">Tạo file <code>.env.local</code> theo mẫu <code>.env.example</code> rồi chạy lại <code>npm run dev</code>. Muốn xem thử giao diện: <code>npm run demo</code>.</p>
     </div></div>
+  )
+}
+
+// Sáng / Tối / Theo máy: mỗi máy nhớ lựa chọn riêng
+function ThemePick() {
+  const [t, setT] = useState(() => store.get('kt_theme') || 'auto')
+  const pick = (v) => {
+    setT(v); store.set('kt_theme', v)
+    if (v === 'auto') delete document.documentElement.dataset.theme
+    else document.documentElement.dataset.theme = v
+  }
+  return (
+    <div className="theme-pick">
+      {[['light', 'Sáng'], ['dark', 'Tối'], ['auto', 'Theo máy']].map(([v, l]) => <button key={v} className={t === v ? 'on' : ''} onClick={() => pick(v)}>{l}</button>)}
+    </div>
   )
 }

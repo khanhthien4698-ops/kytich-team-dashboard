@@ -109,12 +109,8 @@ export default function Today({ me, hasNav, viewId, onView }) {
   // ---- Việc cần làm (ngắn, mỗi dòng 1 việc) ----
   const todo = []
   const goTab = (t) => { setPickTab(t); scrollToId('seeding') }
-  if (nCmt < qCmt) todo.push({ ic: '💬', t: `Seeding thêm ${qCmt - nCmt} bài cần trả lời`, s: `Còn ${leftT} bài giao cho ${who.id === me.id ? 'bạn' : firstName}`, btn: 'Xem bài', go: () => goTab('comment') })
-  if (nPost < qPost) todo.push({ ic: '📝', t: `Seeding thêm ${qPost - nPost} bài từ ý tưởng`, s: `Kho còn ${pool.free.length} ý tưởng`, btn: 'Xem ý tưởng', go: () => goTab('post') })
-  if (yday.fb && !fbSeen) todo.push({ ic: '⭐', t: 'Đọc góp ý của bot cho hôm qua', s: yday.fb.text.slice(0, 80) + (yday.fb.text.length > 80 ? '…' : ''), btn: 'Đọc', go: () => { store.set(fbKey, '1'); scrollToId('s1'); load() } })
-  const undone = routines.find((r) => !checkOf(r.id)?.done)
-  if (undone) todo.push({ ic: '☑️', t: undone.title, s: 'Việc hằng ngày', btn: 'Xong', go: () => toggle(undone, { done: true }) })
-
+  todo.push({ ic: '💬', t: nCmt >= qCmt ? `Đủ ${qCmt} bài cần trả lời hôm nay` : `Còn ${qCmt - nCmt} bài cần trả lời`, s: `Đã trả lời ${nCmt}/${qCmt} bài · ${leftT} bài đang chờ ${who.id === me.id ? 'bạn' : firstName}`, btn: 'Xem bài', go: () => goTab('comment'), ok: nCmt >= qCmt })
+  todo.push({ ic: '📝', t: nPost >= qPost ? `Đủ ${qPost} bài seeding hôm nay` : `Còn ${qPost - nPost} bài seeding`, s: `Đã seeding ${nPost}/${qPost} bài · kho còn ${pool.free.length}+ ý tưởng`, btn: 'Xem ý tưởng', go: () => goTab('post'), ok: nPost >= qPost })
   return (
     <>
       {/* ---- Đầu trang: 1 dòng tóm tắt ---- */}
@@ -148,14 +144,14 @@ export default function Today({ me, hasNav, viewId, onView }) {
       )}
 
       <section className="card">
-        <div className="card-h"><h2>Việc cần làm</h2>{todo.length > 0 && <span className="count">{todo.length} việc</span>}</div>
-        {todo.length === 0 ? <p className="empty">Xong hết rồi. Đủ việc, đủ bài seeding hôm nay.</p> : (
+        <div className="card-h"><h2>Việc cần làm hôm nay</h2></div>
+        {(
           <div className="next">
             {todo.map((n, i) => (
-              <div key={i} className={'next-item' + (i === 0 ? ' first' : '')}>
+              <div key={i} className={'next-item' + (n.ok ? ' done' : ' first')}>
                 <span className="next-ic">{n.ic}</span>
                 <div className="next-txt">{n.t}{n.s && <span className="sub">{n.s}</span>}</div>
-                {!readOnly && <button className={'btn sm' + (i === 0 ? '' : ' ghost')} onClick={n.go}>{n.btn}</button>}
+                {!readOnly && <button className={'btn sm' + (n.ok ? ' ghost' : '')} onClick={n.go}>{n.btn}</button>}
               </div>
             ))}
           </div>
@@ -302,16 +298,15 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
                     {t.status === 'new' && t.created_at > seenAt && <span className="chip new">Mới</span>}
                     {t.status === 'commented' && <span className="chip ok">Đã seeding</span>}
                   </div>
-                  <a className="tbody tlink" href={t.url} target="_blank" rel="noreferrer" title="Mở bài gốc">{t.question}</a>
+                  <a className="tbody tlink" href={postHref(t)} target="_blank" rel="noreferrer" title="Mở bài gốc">{t.question}</a>
                   {t.angle && <div className="kv"><b>Gợi ý trả lời:</b> {t.angle}</div>}
                   {t.status === 'commented' && (
                     <div className="said">✓ {nm(t.taken_by)} đã seeding{t.comment_text && <>: <b>“{t.comment_text}”</b></>} · bot kiểm tra sáng mai</div>
                   )}
                   {t.status === 'taken' && t.taken_by !== who.id && <div className="sub">{nm(t.taken_by)} đang làm</div>}
                   {!readOnly && canAct(t) && (openForm === t.id
-                    ? <SeedForm withText onCancel={() => setOpenForm(null)} onSave={async (url, text) => {
-                        const pid = await api.answerTarget(t.id, text)
-                        if (url && pid) await api.updatePostUrl(pid, url)
+                    ? <SeedForm textOnly onCancel={() => setOpenForm(null)} onSave={async (_url, text) => {
+                        await api.answerTarget(t.id, text)
                         notify('Đã ghi. Cảm ơn bạn!'); done()
                       }} />
                     : <div className="foot">
@@ -377,8 +372,18 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
   )
 }
 
+// Bot không lấy được link riêng của bài (hay gặp ở bài ẩn danh) thì lưu "link group#đầu bài":
+// mở trang tìm kiếm trong group theo câu đầu bài để ra đúng bài
+function postHref(t) {
+  const u = t.url || ''
+  if (/\/(posts|permalink)\//.test(u) || !u.includes('#')) return u
+  const [base, hash] = u.split('#')
+  const words = (t.question || decodeURIComponent(hash).replace(/-/g, ' ')).replace(/\s+/g, ' ').trim().split(' ').slice(0, 8).join(' ')
+  return base.replace(/\/$/, '') + '/search/?q=' + encodeURIComponent(words)
+}
+
 // Ô nhập khi bấm "Đã seeding": link (+ nội dung đã comment với bài cần trả lời)
-function SeedForm({ withText, groups, onSave, onCancel }) {
+function SeedForm({ textOnly, groups, onSave, onCancel }) {
   const notify = useToast()
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
@@ -389,8 +394,12 @@ function SeedForm({ withText, groups, onSave, onCancel }) {
   async function save(e) {
     e.preventDefault()
     const u = url.trim()
+    if (textOnly) {
+      if (text.trim().length < 5) return notify('Dán nội dung bạn đã seeding.', true)
+      setBusy(true)
+      try { return await onSave(null, text.trim(), null) } catch (x) { notify(x.message, true); return setBusy(false) }
+    }
     if (!/^https?:\/\/\S+$/i.test(u)) return notify('Dán link seeding, bắt đầu bằng https://', true)
-    if (withText && text.trim().length < 5) return notify('Dán nội dung bạn đã seeding.', true)
     let g = null
     if (groups) {
       if (det?.group && !POST_GROUPS.includes(det.group.name)) return notify('Chỉ seeding ở Key Aptis miễn phí hoặc Hội review đề Aptis có tâm.', true)
@@ -402,14 +411,14 @@ function SeedForm({ withText, groups, onSave, onCancel }) {
   }
   return (
     <form className="seedform" onSubmit={save}>
-      <input className="input" placeholder="Dán link seeding" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
+      {!textOnly && <input className="input" placeholder="Dán link seeding" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />}
       {groups && det && !det.group && (
         <select className="input" value={gid} onChange={(e) => setGid(e.target.value)}>
           <option value="">Seeding ở group nào?</option>
           {allowed.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
       )}
-      {withText && <textarea className="input" placeholder="Dán nội dung bạn đã seeding" value={text} onChange={(e) => setText(e.target.value)} />}
+      {textOnly && <textarea className="input" placeholder="Dán nội dung bạn đã seeding vào bài này" value={text} onChange={(e) => setText(e.target.value)} autoFocus />}
       <div className="row">
         <button className="btn sm" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>
         <button type="button" className="btn sm ghost" onClick={onCancel}>Huỷ</button>

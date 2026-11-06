@@ -706,3 +706,5 @@ details.more summary { color: var(--ink-2); font-weight: 600; }
 .seedform textarea.input { min-height: 56px; }
 .tcard .tlink { color: var(--ink); text-decoration: none; word-break: normal; }
 .tcard .tlink:hover { color: var(--red); text-decoration: underline; }
+.next-item.done { background: var(--green-soft); border-color: transparent; }
+.next-item.done .next-txt { color: var(--ok-ink); }

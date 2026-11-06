@@ -12,6 +12,7 @@
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
 //   node scripts/bot.mjs kho-build                    # gom hỏi đáp Zalo nguyên văn vào kho trên máy (JSON + CSV)
 //   node scripts/bot.mjs kho-fill [--min 60]          # nạp hết kho hỏi đáp lên dashboard (kho ý tưởng chung, web hiện 30 câu)
+//   node scripts/bot.mjs market --file market.json      # báo cáo đối thủ cho cả team (xem scripts/examples/market.example.json)
 //   node scripts/bot.mjs target-url --file urls.json    # thay link tạm group#… bằng link bài thật: [{ "from", "to" }]
 //   node scripts/bot.mjs target-text --file texts.json  # sửa nội dung bài đã có: [{ "url", "question" }]
 //   node scripts/bot.mjs groups                          # danh sách group Facebook đang dùng (JSON)
@@ -125,7 +126,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 25).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 26).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -309,6 +310,15 @@ async function main() {
     const rows = picks.map((k) => ({ date: today, topic: k.topic, question: k.q, angle: 'meta:' + JSON.stringify({ src: 'zalo', at: ddmmhh(k.at), n: k.times, ans: k.a }), gift_doc: null, assigned_to: null }))
     for (let i = 0; i < rows.length; i += 200) await q(sb.from('seed_ideas').insert(rows.slice(i, i + 200)))
     console.log(`OK: nạp ${rows.length} câu (${fresh.length} câu mới), kho trên dashboard giờ có ${freeNow + rows.length} câu trống.`)
+  } else if (cmd === 'market') {
+    // Báo cáo đối thủ / thị trường cho cả team (1 bản mỗi ngày, ghi lại thì đè bản cùng ngày)
+    if (!a.file) die('Cần --file market.json')
+    const r = JSON.parse(readFileSync(a.file, 'utf8'))
+    if (!r.summary) die('Cần "summary" (3–5 dòng tóm tắt)')
+    if (!Array.isArray(r.competitors)) die('Cần "competitors": [{ name, url, posts, highlights, events, engagement }]')
+    const row = { date: r.date || vnToday(), summary: r.summary, competitors: r.competitors, suggestions: r.suggestions || [] }
+    await q(sb.from('market_reports').upsert(row, { onConflict: 'date' }))
+    console.log(`OK: đã ghi báo cáo đối thủ ngày ${row.date} (${r.competitors.length} đối thủ).`)
   } else if (cmd === 'target-url') {
     // Thay link tạm (group#…) bằng link thật của bài. Trùng với dòng đã có link thật thì gộp: giữ dòng cũ, bỏ qua dòng tạm.
     if (!a.file) die('Cần --file urls.json')

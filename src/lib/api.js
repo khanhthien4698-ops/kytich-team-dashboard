@@ -149,6 +149,11 @@ export async function countFreeIdeas() {
 }
 // Sửa link của dòng seeding (chủ dòng hoặc admin)
 export const updatePostUrl = (id, url) => q(sb.from('seeding_posts').update({ url }).eq('id', id))
+// Báo cáo đối thủ (bảng có từ SQL 005; chưa có bảng thì trả rỗng để web không lỗi)
+export async function listMarketReports(limit = 7) {
+  const { data, error } = await sb.from('market_reports').select('*').order('date', { ascending: false }).limit(limit)
+  return error ? [] : data || []
+}
 export const skipIdea = (id) => q(sb.rpc('skip_idea', { p_idea: id }))
 export const listSkippedIdeasSince = (since) =>
   q(sb.from('seed_ideas').select('id,question,skipped_by,skipped_at').gte('skipped_at', since).order('skipped_at', { ascending: false }))

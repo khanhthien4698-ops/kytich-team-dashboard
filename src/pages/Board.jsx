@@ -49,15 +49,16 @@ export default function Board({ me, onOpen }) {
   const load = useCallback(async () => {
     try {
       const from = start < yday ? start : yday
-      const [ms, rs, d, reviews, targets, freeIdeas, skipped, reports] = await Promise.all([
+      const [ms, rs, d, reviews, targets, freeIdeas, skipped, reports, market] = await Promise.all([
         api.listMembers(), api.listRoutines(), api.getRange(from, today), api.listReviewsSince(from),
         api.listActiveTargets(today), api.countFreeIdeas(), api.listSkippedIdeasSince(today + 'T00:00:00+07:00'),
         me.role === 'admin' ? api.listReports(addDays(today, -13), today) : Promise.resolve([]),
+        api.listMarketReports(7),
       ])
       setAll(ms)
       setMembers(ms.filter((m) => m.active && m.role === 'staff')); setRoutines(rs)
       setData({ ...d, reviewOf: Object.fromEntries(reviews.map((r) => [r.post_id, r])) })
-      setExtra({ targets, freeIdeas, skipped, reports: reports.filter((r) => !r.member_id) })
+      setExtra({ targets, freeIdeas, skipped, reports: reports.filter((r) => !r.member_id), market })
     } catch (x) { notify(x.message, true) }
   }, [start, end, today, yday, notify])
 
@@ -175,6 +176,8 @@ export default function Board({ me, onOpen }) {
         </section>
       )}
 
+      <Market reports={extra.market} />
+
       <section className="card">
         <div className="card-h"><h2>Vừa làm</h2><span className="count sub">hôm nay, mới nhất trước</span></div>
         {feed.length === 0 && <p className="empty">Hôm nay chưa ai làm gì.</p>}
@@ -240,3 +243,39 @@ function Detail({ m, d, data, routines, onClose }) {
     </section>
   )
 }
+
+// ---- Báo cáo đối thủ / thị trường: bot sáng đọc page đối thủ (chỉ đọc) rồi tóm tắt cho cả team ----
+function Market({ reports }) {
+  if (!reports?.length) return null
+  const [r, ...older] = reports
+  const list = Array.isArray(r.competitors) ? r.competitors : []
+  return (
+    <section className="card market">
+      <div className="card-h"><h2>Báo cáo đối thủ</h2><span className="count sub">{longDate(r.date)} · bot đọc page đối thủ mỗi sáng</span></div>
+      <p className="market-sum">{r.summary}</p>
+      <div className="mgrid">
+        {list.map((c, i) => (
+          <article key={i} className="mcard">
+            <div className="mhead">
+              {c.url ? <a href={c.url} target="_blank" rel="noreferrer"><b>{c.name}</b> ↗</a> : <b>{c.name}</b>}
+              {c.posts != null && <span className="chip">{c.posts} bài mới</span>}
+            </div>
+            {c.events?.length > 0 && <div className="mevents">{c.events.map((e, j) => <span key={j} className="chip new">🎁 {e}</span>)}</div>}
+            {c.highlights?.length > 0 && <ul>{c.highlights.map((h, j) => <li key={j}>{h}</li>)}</ul>}
+            {c.engagement && <div className="sub">Tương tác: {c.engagement}</div>}
+          </article>
+        ))}
+      </div>
+      {Array.isArray(r.suggestions) && r.suggestions.length > 0 && (
+        <div className="msugg"><b>Team nên làm:</b><ul>{r.suggestions.map((x, j) => <li key={j}>{x}</li>)}</ul></div>
+      )}
+      {older.length > 0 && (
+        <details className="more">
+          <summary>Các ngày trước ({older.length})</summary>
+          {older.map((o) => <div key={o.id} className="report"><b>{longDate(o.date)}</b>{'\n'}{o.summary}</div>)}
+        </details>
+      )}
+    </section>
+  )
+}
+

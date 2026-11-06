@@ -713,3 +713,18 @@ details.more summary { color: var(--ink-2); font-weight: 600; }
 .gtags button span { color: var(--ink-3); margin-left: 4px; font-weight: 600; }
 .gtags button.on { border-color: var(--red); color: var(--red); background: var(--orange-soft); }
 .gtags button.on span { color: var(--red); }
+
+/* ---- Báo cáo đối thủ (Cả đội) ---- */
+.market-sum { margin: 0 0 14px; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.mgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 960px) { .mgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .mgrid { grid-template-columns: minmax(0, 1fr); } }
+.mcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--tint); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mhead { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.mhead a { color: var(--ink); text-decoration: none; word-break: normal; }
+.mhead a:hover { color: var(--red); }
+.mevents { display: flex; flex-wrap: wrap; gap: 6px; }
+.mevents .chip { white-space: normal; }
+.mcard ul, .msugg ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); }
+.mcard li, .msugg li { margin: 2px 0; }
+.msugg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--orange-soft); font-size: 14px; }

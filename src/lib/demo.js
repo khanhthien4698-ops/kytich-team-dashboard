@@ -95,7 +95,17 @@ function seed() {
     status: i === 0 ? 'commented' : i === 1 ? 'skipped' : i === 2 ? 'taken' : 'new', taken_by: i <= 2 ? staff[i % 3].id : null,
     taken_at: null, post_id: null, created_at: new Date().toISOString(),
   }))
-  return { seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
+  const market_reports = [
+    { id: uid(), date: today, created_at: new Date().toISOString(), summary: 'Aptisweb.vn đăng dự đoán đề mỗi tối và đẩy mạnh "check cmt". Pre Aptis chạy ưu đãi khoá B2 tháng 11. Aptis SV giảm giá khoá cam kết còn 1tr4.',
+      competitors: [
+        { name: 'Aptisweb.vn', url: 'https://www.facebook.com/', posts: 6, highlights: ['Đăng dự đoán đề thi mỗi tối 19h–20h', 'Bài "Đề Art Club đổi mới" hút 120 cảm xúc'], events: ['Mini game tặng tài khoản 1 tháng (hết 10/11)'], engagement: '40–80 cảm xúc/bài' },
+        { name: 'Pre Aptis – Thầy Việt Anh', url: 'https://www.facebook.com/', posts: 3, highlights: ['Nhiều comment ẩn danh giới thiệu trong các group', 'Bài chữa Speaking B2 dạng video'], events: ['Giảm 20% khoá B2 tới 15/11'], engagement: '20–30 cảm xúc/bài' },
+        { name: 'Aptis SV – Thầy Quốc Anh', url: 'https://www.facebook.com/', posts: 4, highlights: ['Chữa Speaking hằng ngày', 'Khoá cam kết B1–B2–C từ 1tr4'], events: [], engagement: '10–20 cảm xúc/bài' },
+      ],
+      suggestions: ['Đăng dự đoán đề trước 19h để ra trước Aptisweb', 'Làm 1 bài chữa Speaking dạng video ngắn'] },
+    { id: uid(), date: addDays(today, -1), created_at: new Date().toISOString(), summary: 'Aptisweb.vn ra bộ đề Travel Club mới. Pre Aptis tăng tần suất đăng lên 4 bài/ngày.', competitors: [], suggestions: [] },
+  ]
+  return { market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
 }
 
 const db = seed()

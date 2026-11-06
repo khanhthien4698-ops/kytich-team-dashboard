@@ -12,6 +12,7 @@
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
 //   node scripts/bot.mjs kho-build                    # gom hỏi đáp Zalo nguyên văn vào kho trên máy (JSON + CSV)
 //   node scripts/bot.mjs kho-fill [--min 60]          # nạp hết kho hỏi đáp lên dashboard (kho ý tưởng chung, web hiện 30 câu)
+//   node scripts/bot.mjs target-url --file urls.json    # thay link tạm group#… bằng link bài thật: [{ "from", "to" }]
 //   node scripts/bot.mjs target-text --file texts.json  # sửa nội dung bài đã có: [{ "url", "question" }]
 //   node scripts/bot.mjs groups                          # danh sách group Facebook đang dùng (JSON)
 //   node scripts/bot.mjs run-start morning|evening|scan  # in DONE / BUSY / GO (GO = giữ khóa, bắt đầu làm)
@@ -124,7 +125,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 24).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 25).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -308,6 +309,21 @@ async function main() {
     const rows = picks.map((k) => ({ date: today, topic: k.topic, question: k.q, angle: 'meta:' + JSON.stringify({ src: 'zalo', at: ddmmhh(k.at), n: k.times, ans: k.a }), gift_doc: null, assigned_to: null }))
     for (let i = 0; i < rows.length; i += 200) await q(sb.from('seed_ideas').insert(rows.slice(i, i + 200)))
     console.log(`OK: nạp ${rows.length} câu (${fresh.length} câu mới), kho trên dashboard giờ có ${freeNow + rows.length} câu trống.`)
+  } else if (cmd === 'target-url') {
+    // Thay link tạm (group#…) bằng link thật của bài. Trùng với dòng đã có link thật thì gộp: giữ dòng cũ, bỏ qua dòng tạm.
+    if (!a.file) die('Cần --file urls.json')
+    const items = JSON.parse(readFileSync(a.file, 'utf8'))
+    let fixed = 0, merged = 0
+    for (const it of items) {
+      if (!it.from || !/^https:\/\/www\.facebook\.com\/groups\/.+\/(posts|permalink)\/\d+/.test(it.to || '')) die('Mỗi dòng cần "from" và "to" là link bài thật')
+      const [row] = await q(sb.from('seed_targets').select('*').eq('url', it.from))
+      if (!row) continue
+      const [ex] = await q(sb.from('seed_targets').select('*').eq('url', it.to))
+      if (!ex) { await q(sb.from('seed_targets').update({ url: it.to }).eq('id', row.id)); fixed++; continue }
+      if (ex.status === 'new' || ex.status === 'taken') await q(sb.from('seed_targets').update({ date: row.date > ex.date ? row.date : ex.date }).eq('id', ex.id))
+      await q(sb.from('seed_targets').update({ status: 'skipped' }).eq('id', row.id)); merged++
+    }
+    console.log(`OK: sửa link ${fixed} bài, gộp ${merged} bài trùng.`)
   } else if (cmd === 'target-text') {
     // Sửa nội dung bài (cột question) của cơ hội đã có theo url; không đụng trạng thái/người nhận
     if (!a.file) die('Cần --file texts.json')

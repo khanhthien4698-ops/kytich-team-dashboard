@@ -85,9 +85,11 @@ export default function Today({ me, hasNav, viewId, onView }) {
   const nPost = day.posts.filter((p) => p.kind === 'post').length
   const nCmt = day.posts.filter((p) => p.kind === 'comment').length
   const qPost = who.seeding_quota ?? 0
-  const qCmt = who.comment_quota ?? 0
+  // Bài trả lời không có chỉ tiêu: có bao nhiêu bài giao cho mình thì trả lời hết (Thiện chốt 06/11)
+  const leftMine = targets.filter((t) => (t.status === 'new' && t.assigned_to === who.id) || (t.status === 'taken' && t.taken_by === who.id)).length
+  const qCmt = nCmt + leftMine
   const units = totalR + qPost + qCmt
-  const pct = units ? (doneR + Math.min(nPost, qPost) + Math.min(nCmt, qCmt)) / units : 0
+  const pct = units ? (doneR + Math.min(nPost, qPost) + nCmt) / units : 0
   const leftT = targets.filter((t) => (t.status === 'new' && t.assigned_to === who.id) || (t.status === 'taken' && t.taken_by === who.id)).length
   const yScores = yday.posts.map((p) => yday.reviewOf[p.id]?.score).filter(Boolean)
   const yAvg = yScores.length ? yScores.reduce((a, b) => a + b, 0) / yScores.length : null
@@ -114,7 +116,7 @@ export default function Today({ me, hasNav, viewId, onView }) {
   // ---- Việc cần làm (ngắn, mỗi dòng 1 việc) ----
   const todo = []
   const goTab = (t) => { setPickTab(t); scrollToId('seeding') }
-  todo.push({ ic: '💬', t: nCmt >= qCmt ? `Đủ ${qCmt} bài cần trả lời hôm nay` : `Còn ${qCmt - nCmt} bài cần trả lời`, s: `Đã trả lời ${nCmt}/${qCmt} bài · ${leftT} bài đang chờ ${who.id === me.id ? 'bạn' : firstName}`, btn: 'Xem bài', go: () => goTab('comment'), ok: nCmt >= qCmt })
+  todo.push({ ic: '💬', t: leftT === 0 ? 'Đã trả lời hết bài cần trả lời' : `Còn ${leftT} bài cần trả lời`, s: `Hôm nay đã trả lời ${nCmt} bài · có bài mới là trả lời hết`, btn: 'Xem bài', go: () => goTab('comment'), ok: leftT === 0 })
   todo.push({ ic: '📝', t: nPost >= qPost ? `Đủ ${qPost} bài seeding hôm nay` : `Còn ${qPost - nPost} bài seeding`, s: `Đã seeding ${nPost}/${qPost} bài · kho còn ${pool.free.length}+ ý tưởng`, btn: 'Xem ý tưởng', go: () => goTab('post'), ok: nPost >= qPost })
   return (
     <>
@@ -127,7 +129,7 @@ export default function Today({ me, hasNav, viewId, onView }) {
             <div className="bar hero-bar"><span style={{ width: Math.round(pct * 100) + '%' }} /></div>
             <div className="summary">
               <span>Đã seeding <b>{nPost}/{qPost}</b> bài</span>
-              <span>Đã trả lời <b>{nCmt}/{qCmt}</b> bài</span>
+              <span>Đã trả lời <b>{nCmt}</b> bài</span>
               <span>Còn <b>{leftT}</b> bài cần trả lời</span>
               {yAvg && <span>Điểm bot hôm qua <b>★ {yAvg.toFixed(1).replace('.', ',')}</b></span>}
             </div>
@@ -291,7 +293,7 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
 
       {tab === 'comment' && (
         <>
-          <div className="list-count">{you} đã trả lời <b>{nCmt}/{qCmt}</b> bài hôm nay. Bấm vào nội dung bài để mở bài gốc.</div>
+          <div className="list-count">{you} đã trả lời <b>{nCmt}</b> bài hôm nay, còn <b>{qCmt - nCmt}</b> bài chưa trả lời. Bấm vào nội dung bài để mở bài gốc.</div>
           <div className="gtags">
             <button className={gFilter === '' ? 'on' : ''} onClick={() => setGFilter('')}>Tất cả <span>{openT.length + doneT.length}</span></button>
             {POST_GROUPS.map((g) => <button key={g} className={gFilter === g ? 'on' : ''} onClick={() => setGFilter(g)}>{GROUP_SHORT[g] || g} <span>{[...openT, ...doneT].filter((t) => t.group_name === g).length}</span></button>)}
@@ -520,7 +522,7 @@ function SeedLog({ day, setDay, nPost, nCmt, qPost, qCmt, onAdd, readOnly }) {
     <section className="card" id="s-log">
       <StepHead no={3} done={nPost >= qPost && nCmt >= qCmt} title="Bài đã làm hôm nay" right={`${day.posts.length} link`} hint="Mọi link bài đăng và bài trả lời trong ngày." />
       <Bar label="Bài đăng" n={nPost} q={qPost} />
-      <Bar label="Bài trả lời" n={nCmt} q={qCmt} />
+      <Bar label="Bài trả lời" n={nCmt} q={Math.max(qCmt, nCmt)} />
       <div className="rule">🚫 <b>Không đóng vai học viên.</b> Không chép nguyên tin nhắn Zalo của khách. Không dán link trơ trọi hay văn mẫu lặp lại. Đăng từ nick/trang Kỳ Tích hoặc trả lời câu hỏi thật.</div>
       {day.posts.length === 0 && <p className="empty">Chưa có link nào hôm nay.</p>}
       {day.posts.map((p, i) => (

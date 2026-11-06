@@ -19,13 +19,13 @@ function dayStat(m, date, data, routines, today) {
   const a = posts.filter((p) => p.kind === 'post').length
   const b = m.seeding_quota ?? 0
   const c = posts.filter((p) => p.kind === 'comment').length
-  const d = m.comment_quota ?? 0
+  const d = 0 // bài trả lời không có chỉ tiêu (Thiện chốt 06/11)
   const rv = posts.map((p) => data.reviewOf[p.id]).filter(Boolean)
   const scores = rv.map((r) => r.score).filter(Boolean)
   const avg = scores.length ? scores.reduce((s, v) => s + v, 0) / scores.length : null
   const bad = rv.filter(isBad)
-  const units = y + b + d
-  const pct = units ? (x + Math.min(a, b) + Math.min(c, d)) / units : 0
+  const units = y + b
+  const pct = units ? (x + Math.min(a, b)) / units : 0
   let cls = 'y'
   if (x === 0 && posts.length === 0 && !note) cls = 'r'
   else if (x >= y && a >= b && c >= d) cls = 'g'
@@ -72,12 +72,16 @@ export default function Board({ me, onOpen }) {
   if (!data || !extra) return <p className="empty">Đang tải…</p>
 
   const todayS = members.map((m) => ({ m, s: dayStat(m, today, data, routines, today), y: dayStat(m, yday, data, routines, today) }))
-  const teamPct = todayS.length ? todayS.reduce((t, p) => t + p.s.pct, 0) / todayS.length : 0
   const isAdmin = me.role === 'admin'
   const nameOf = Object.fromEntries(all.map((m) => [m.id, m.name]))
   const open = (m, d) => setSel(sel?.m.id === m.id && sel?.d === d ? null : { m, d })
   const sum = (k) => todayS.reduce((t, p) => t + (p.s[k] || 0), 0)
-  const leftT = extra.targets.filter((t) => targetToday(t, today) && (t.status === 'new' || t.status === 'taken')).length
+  const openNow = extra.targets.filter((t) => targetToday(t, today) && (t.status === 'new' || t.status === 'taken'))
+  const leftT = openNow.length
+  const leftOf = (m) => openNow.filter((t) => (t.status === 'new' && t.assigned_to === m.id) || (t.status === 'taken' && t.taken_by === m.id)).length
+  // % hôm nay tính cả bài trả lời: đã trả lời / (đã trả lời + còn phải trả lời)
+  const pctNow = (m, s) => { const u = s.y + s.b + s.c + leftOf(m); return u ? (s.x + Math.min(s.a, s.b) + s.c) / u : 0 }
+  const teamNow = todayS.length ? todayS.reduce((t, p) => t + pctNow(p.m, p.s), 0) / todayS.length : 0
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).format(new Date()))
 
   // Điểm bot TB 7 ngày của 1 người
@@ -109,10 +113,10 @@ export default function Board({ me, onOpen }) {
         <div className="hero-top">
           <div>
             <div className="hero-hello">{greet()} · {longDate(today)}</div>
-            <h1>Cả đội hôm nay xong {Math.round(teamPct * 100)}%</h1>
+            <h1>Cả đội hôm nay xong {Math.round(teamNow * 100)}%</h1>
             <div className="summary">
               <span>Đã seeding <b>{sum('a')}/{sum('b')}</b> bài</span>
-              <span>Đã trả lời <b>{sum('c')}/{sum('d')}</b> bài</span>
+              <span>Đã trả lời <b>{sum('c')}</b> bài</span>
               <span>Còn <b>{leftT}</b> bài cần trả lời</span>
               <span>Kho ý tưởng còn <b>{extra.freeIdeas}</b> câu</span>
             </div>
@@ -131,11 +135,11 @@ export default function Board({ me, onOpen }) {
               <div className="phead">
                 <span className="avatar">{initials(m.name)}</span>
                 <div style={{ minWidth: 0 }}><b>{m.name}</b><span className="sub">{s.cls === 'r' ? 'Chưa làm gì hôm nay' : last ? `Vừa ${last.kind === 'post' ? 'đăng bài' : 'trả lời bài'} lúc ${timeVN(last.created_at)}` : 'Đang làm'}</span></div>
-                <div className="pct">{Math.round(s.pct * 100)}%</div>
+                <div className="pct">{Math.round(pctNow(m, s) * 100)}%</div>
               </div>
               <div className="pnums">
                 <div className="pnum"><div className="lbl">Bài seeding</div><div className="v">{s.a}<small> / {s.b}</small></div></div>
-                <div className="pnum"><div className="lbl">Bài trả lời</div><div className="v">{s.c}<small> / {s.d}</small></div></div>
+                <div className="pnum"><div className="lbl">Còn phải trả lời</div><div className="v">{leftOf(m)}<small> · đã trả lời {s.c}</small></div></div>
                 <div className="pnum"><div className="lbl">Điểm bot 7 ngày</div><div className="v">{a ? '★ ' + a.toFixed(1).replace('.', ',') : '—'}</div></div>
               </div>
               <div className="pfoot">

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import * as api from '../lib/api.js'
 import { vnToday, addDays, rangeDays, ddmm, weekday, longDate, timeVN } from '../lib/date.js'
 import { useToast } from '../App.jsx'
-import { KIND_SHORT as KIND } from './Today.jsx'
+import { KIND_SHORT as KIND, targetToday } from './Today.jsx'
 import Review, { isBad } from '../components/Review.jsx'
 import { initials, greet, shortName } from '../components/ui.jsx'
 
@@ -77,7 +77,7 @@ export default function Board({ me, onOpen }) {
   const nameOf = Object.fromEntries(all.map((m) => [m.id, m.name]))
   const open = (m, d) => setSel(sel?.m.id === m.id && sel?.d === d ? null : { m, d })
   const sum = (k) => todayS.reduce((t, p) => t + (p.s[k] || 0), 0)
-  const leftT = extra.targets.filter((t) => t.status === 'new' || t.status === 'taken').length
+  const leftT = extra.targets.filter((t) => targetToday(t, today) && (t.status === 'new' || t.status === 'taken')).length
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).format(new Date()))
 
   // Điểm bot TB 7 ngày của 1 người

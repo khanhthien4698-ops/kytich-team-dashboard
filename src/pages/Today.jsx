@@ -22,7 +22,12 @@ const scrollToId = (id) => document.getElementById(id)?.scrollIntoView({ behavio
 
 // Chỉ đăng bài seeding ở 2 group này (Thiện chốt 06/11)
 export const POST_GROUPS = ['Key Aptis miễn phí - update liên tục', 'Hội review đề Aptis có tâm']
+const GROUP_SHORT = { 'Key Aptis miễn phí - update liên tục': 'Key Aptis miễn phí', 'Hội review đề Aptis có tâm': 'Hội review đề (group mình)' }
 const vnDate = (ts) => ts && new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(ts))
+// Bài cần trả lời: chỉ ở 2 group được seeding, cộng dồn từ 05/11 trở đi (bài cũ hơn ẩn khỏi danh sách) — Thiện chốt 06/11
+export const TARGET_FROM = '2026-11-05'
+export const targetToday = (x, today) => POST_GROUPS.includes(x.group_name) && x.date >= TARGET_FROM
+  && (x.status !== 'commented' || vnDate(x.taken_at) === today)
 
 export default function Today({ me, hasNav, viewId, onView }) {
   const notify = useToast()
@@ -50,7 +55,7 @@ export default function Today({ me, hasNav, viewId, onView }) {
       ])
       setMembers(ms)
       setD({
-        routines: rs.filter((r) => r.active), day, pool, groups: gs.filter((g) => g.active), targets, teamPosts,
+        routines: rs.filter((r) => r.active), day, pool, groups: gs.filter((g) => g.active), targets: targets.filter((x) => targetToday(x, t)), teamPosts,
         yday: { posts: yday.posts, reviewOf: Object.fromEntries(yrev.map((r) => [r.post_id, r])), fb },
         hist: hist.filter((p) => p.member_id === whoId),
       })
@@ -253,6 +258,7 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
   const notify = useToast()
   const [busy, setBusy] = useState(null)
   const [openForm, setOpenForm] = useState(null) // id của dòng đang mở ô nhập
+  const [gFilter, setGFilter] = useState('') // lọc bài cần trả lời theo group
   const run = async (id, fn, ok) => {
     setBusy(id)
     try { await fn(); if (ok) notify(ok) } catch (x) { notify(x.message, true) }
@@ -286,9 +292,13 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
       {tab === 'comment' && (
         <>
           <div className="list-count">{you} đã trả lời <b>{nCmt}/{qCmt}</b> bài hôm nay. Bấm vào nội dung bài để mở bài gốc.</div>
+          <div className="gtags">
+            <button className={gFilter === '' ? 'on' : ''} onClick={() => setGFilter('')}>Tất cả <span>{openT.length + doneT.length}</span></button>
+            {POST_GROUPS.map((g) => <button key={g} className={gFilter === g ? 'on' : ''} onClick={() => setGFilter(g)}>{GROUP_SHORT[g] || g} <span>{[...openT, ...doneT].filter((t) => t.group_name === g).length}</span></button>)}
+          </div>
           {openT.length + doneT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot vào group khoảng 3 tiếng một lần, có bài mới sẽ báo ở đầu trang.</div></div>}
           <div className="ideas two scroll-list">
-            {[...openT, ...doneT].map((t) => {
+            {[...openT, ...doneT].filter((t) => !gFilter || t.group_name === gFilter).map((t) => {
               const forMe = t.assigned_to === who.id
               return (
                 <article key={t.id} className={'idea tcard' + (t.status === 'commented' ? ' mine' : t.taken_by && t.taken_by !== who.id ? ' taken' : '')}>

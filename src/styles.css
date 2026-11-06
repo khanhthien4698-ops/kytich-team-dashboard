@@ -708,3 +708,8 @@ details.more summary { color: var(--ink-2); font-weight: 600; }
 .tcard .tlink:hover { color: var(--red); text-decoration: underline; }
 .next-item.done { background: var(--green-soft); border-color: transparent; }
 .next-item.done .next-txt { color: var(--ok-ink); }
+.gtags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.gtags button { border: 1px solid var(--line); background: var(--card); color: var(--ink-2); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.gtags button span { color: var(--ink-3); margin-left: 4px; font-weight: 600; }
+.gtags button.on { border-color: var(--red); color: var(--red); background: var(--orange-soft); }
+.gtags button.on span { color: var(--red); }

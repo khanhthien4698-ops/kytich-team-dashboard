@@ -601,3 +601,56 @@ details.more summary { color: var(--ink-2); font-weight: 600; }
 .kpis.kpis4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (min-width: 900px) { .kpis.kpis4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .kpi .mini { margin-top: 2px; }
+
+/* ==========================================================================
+   BẢN "CẢ ĐỘI" (06/11, Thiện duyệt mockup v2)
+   ========================================================================== */
+.summary { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 12px; font-size: 14px; color: var(--ink-2); position: relative; z-index: 1; }
+.summary b { color: var(--ink); font-weight: 650; }
+.hero-bar { max-width: 420px; height: 8px; margin-top: 14px; position: relative; z-index: 1; }
+.ov-hero .hero-top, .hero .hero-top { align-items: flex-start; }
+.viewing { margin: 12px 0 0; padding: 10px 14px; border: 1px solid #ffe6bf; background: #fffaf0; border-radius: 10px; font-size: 13px; color: var(--ink-2); }
+
+/* Thẻ từng người */
+.people2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+@media (max-width: 760px) { .people2 { grid-template-columns: minmax(0, 1fr); } }
+.pcard { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; cursor: pointer; transition: border-color .15s; min-width: 0; }
+.pcard:hover { border-color: #ffc9b5; }
+.pcard.mine { outline: 2px solid var(--red); outline-offset: -1px; }
+.phead { display: flex; align-items: center; gap: 12px; }
+.phead .avatar { width: 38px; height: 38px; font-size: 14px; cursor: inherit; }
+.phead b { font-size: 16px; font-weight: 600; display: block; }
+.phead .sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phead .pct { margin-left: auto; font-size: 28px; font-weight: 650; letter-spacing: -.02em; }
+.pnums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pnum { background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.pnum .lbl { font-size: 12px; color: var(--ink-3); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pnum .v { font-size: 20px; font-weight: 650; margin-top: 2px; }
+.pnum .v small { font-size: 13px; color: var(--ink-3); font-weight: 500; }
+.pfoot { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-3); }
+.pfoot .days7 { margin: 0 0 0 auto; }
+.cta-me { font-size: 13px; color: var(--red); font-weight: 600; }
+@media (max-width: 560px) { .pnum { padding: 8px; } .pnum .v { font-size: 17px; } .pfoot .days7 { grid-template-columns: repeat(7, 12px); } .pfoot .days7 .d { width: 12px; height: 12px; } }
+
+/* Vừa làm */
+.feed-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line-2); font-size: 14px; }
+.feed-row:first-of-type { border-top: 0; }
+.avatar.sm { width: 26px; height: 26px; font-size: 10px; cursor: default; }
+.feed-s { color: var(--ink-2); display: inline; }
+
+/* Vùng seeding */
+.zone .card-h .sub { margin-left: 4px; }
+.zone .seg { margin-bottom: 4px; }
+.irow.doing { background: #fffaf6; }
+.iwho { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.iwho-doing { color: #9a5c00; font-weight: 600; font-size: 13px; }
+.pastebox { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.pastebox .input { min-height: 34px; font-size: 13px; }
+.irow { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 210px 170px; }
+.cmtbox { display: flex; gap: 8px; align-items: flex-start; width: 100%; flex-wrap: wrap; }
+.cmtbox textarea { flex: 1; min-width: 200px; min-height: 42px; font-size: 13px; }
+.said { font-size: 13px; color: var(--ink-2); background: var(--green-soft); border-radius: 8px; padding: 8px 10px; }
+.said b { color: #0f8a5f; font-weight: 600; }
+.chip.mine { background: var(--orange-soft); color: var(--red); }
+.idea.open { background: #fffaf6; }
+@media (max-width: 760px) { .irow { grid-template-columns: 1fr auto; } .cmtbox textarea { min-width: 0; width: 100%; } }

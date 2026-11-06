@@ -4,7 +4,7 @@ import { vnToday, addDays, rangeDays, ddmm, weekday, longDate, timeVN } from '..
 import { useToast } from '../App.jsx'
 import { KIND_SHORT as KIND } from './Today.jsx'
 import Review, { isBad } from '../components/Review.jsx'
-import { Mascot, Ring, initials, greet, shortName } from '../components/ui.jsx'
+import { initials, greet, shortName } from '../components/ui.jsx'
 
 // Số liệu 1 người trong 1 ngày. Màu: xanh = đủ việc + bài + comment; đỏ = không làm gì; vàng = có làm nhưng thiếu
 function dayStat(m, date, data, routines, today) {
@@ -32,11 +32,11 @@ function dayStat(m, date, data, routines, today) {
   return { cls, x, y, a, b, c, d, avg, bad, note, pct }
 }
 
-export default function Board({ go }) {
+export default function Board({ me, onOpen }) {
   const notify = useToast()
   const today = vnToday()
   const yday = addDays(today, -1)
-  const [end, setEnd] = useState(today)
+  const end = today
   const start = addDays(end, -6)
   const days = rangeDays(start, end)
   const [members, setMembers] = useState([])
@@ -44,17 +44,20 @@ export default function Board({ go }) {
   const [data, setData] = useState(null)
   const [extra, setExtra] = useState(null)
   const [sel, setSel] = useState(null)
+  const [all, setAll] = useState([])
 
   const load = useCallback(async () => {
     try {
       const from = start < yday ? start : yday
-      const [ms, rs, d, reviews, targets, ideas, reports, fbs] = await Promise.all([
+      const [ms, rs, d, reviews, targets, freeIdeas, skipped, reports] = await Promise.all([
         api.listMembers(), api.listRoutines(), api.getRange(from, today), api.listReviewsSince(from),
-        api.listTargets(yday, today), api.listIdeas(today), api.listReports(addDays(today, -13), today), api.listFeedback(yday, yday),
+        api.listActiveTargets(today), api.countFreeIdeas(), api.listSkippedIdeasSince(today + 'T00:00:00+07:00'),
+        me.role === 'admin' ? api.listReports(addDays(today, -13), today) : Promise.resolve([]),
       ])
+      setAll(ms)
       setMembers(ms.filter((m) => m.active && m.role === 'staff')); setRoutines(rs)
       setData({ ...d, reviewOf: Object.fromEntries(reviews.map((r) => [r.post_id, r])) })
-      setExtra({ targets, ideas, reports: reports.filter((r) => !r.member_id), fbs })
+      setExtra({ targets, freeIdeas, skipped, reports: reports.filter((r) => !r.member_id) })
     } catch (x) { notify(x.message, true) }
   }, [start, end, today, yday, notify])
 
@@ -70,15 +73,28 @@ export default function Board({ go }) {
 
   const todayS = members.map((m) => ({ m, s: dayStat(m, today, data, routines, today), y: dayStat(m, yday, data, routines, today) }))
   const teamPct = todayS.length ? todayS.reduce((t, p) => t + p.s.pct, 0) / todayS.length : 0
-  const working = todayS.filter((p) => p.s.cls !== 'r').length
-  const newTargets = extra.targets.filter((t) => t.status === 'new').length
-  const freeIdeas = extra.ideas.filter((i) => !i.taken_by).length
-  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).format(new Date()))
+  const isAdmin = me.role === 'admin'
+  const nameOf = Object.fromEntries(all.map((m) => [m.id, m.name]))
   const open = (m, d) => setSel(sel?.m.id === m.id && sel?.d === d ? null : { m, d })
+  const sum = (k) => todayS.reduce((t, p) => t + (p.s[k] || 0), 0)
+  const leftT = extra.targets.filter((t) => t.status === 'new' || t.status === 'taken').length
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).format(new Date()))
 
-  // ---- Việc của Thiện: ngắn, mỗi dòng 1 hành động ----
+  // Điểm bot TB 7 ngày của 1 người
+  const avg7 = (m) => {
+    const sc = data.posts.filter((p) => p.member_id === m.id && p.date >= start).map((p) => data.reviewOf[p.id]?.score).filter(Boolean)
+    return sc.length ? sc.reduce((a, b) => a + b, 0) / sc.length : null
+  }
+  const lastAct = (m) => data.posts.filter((p) => p.member_id === m.id && p.date === today).sort((a, b) => (b.created_at > a.created_at ? 1 : -1))[0]
+
+  // "Vừa làm": bài đăng / bài trả lời / bỏ qua ý tưởng hôm nay, mới nhất trước
+  const feed = [
+    ...data.posts.filter((p) => p.date === today).map((p) => ({ at: p.created_at, who: p.member_id, t: p.kind === 'post' ? 'đăng bài' : 'trả lời bài', s: p.question || null, g: p.group_name, url: p.url })),
+    ...extra.skipped.map((i) => ({ at: i.skipped_at, who: i.skipped_by, t: 'bỏ qua ý tưởng', s: i.question })),
+  ].filter((x) => x.at).sort((a, b) => (b.at > a.at ? 1 : -1)).slice(0, 12)
+
+  // ---- Việc của Thiện (chỉ admin) ----
   const todo = []
-  // Hôm qua cả team trống (vd ngày đầu dùng) thì không nhắc chuyện nghỉ
   const teamWorkedYday = todayS.some((p) => p.y.cls !== 'r')
   todayS.forEach(({ m, s, y }) => {
     const n = shortName(m.name)
@@ -86,96 +102,95 @@ export default function Board({ go }) {
     if (y.bad?.length) todo.push({ c: 'r', t: `Xem bài bị gỡ của ${n}`, s: `${y.bad.length} bài hôm qua`, go: () => open(m, yday) })
     else if (teamWorkedYday && y.cls === 'r') todo.push({ c: 'y', t: `Hỏi ${n} vì sao hôm qua nghỉ`, s: 'Không ghi gì hôm qua', go: () => open(m, yday) })
   })
-  if (newTargets + freeIdeas > 0) todo.push({ c: 'y', t: 'Nhắc team nhận việc', s: `${newTargets} bài cần trả lời · ${freeIdeas} ý tưởng bài đăng chưa ai nhận` })
-  const sum = (k) => todayS.reduce((t, p) => t + (p.s[k] || 0), 0)
-  const sumY = (k) => todayS.reduce((t, p) => t + (p.y[k] || 0), 0)
-  const yAvgs = todayS.map((p) => p.y.avg).filter(Boolean)
-  const ydayAvg = yAvgs.length ? yAvgs.reduce((t, v) => t + v, 0) / yAvgs.length : null
-  const pose = teamPct >= 1 ? 'trophy' : todo.some((a) => a.c === 'r') ? 'search' : 'cheer'
 
   return (
     <>
       <section className="hero ov-hero">
         <div className="hero-top">
-          <Mascot who="tichtich" pose={pose} />
           <div>
             <div className="hero-hello">{greet()} · {longDate(today)}</div>
-            <div className="big-pct">{Math.round(teamPct * 100)}<small>%</small></div>
-            <div className="ov-line">đội hoàn thành hôm nay · {working}/{todayS.length} bạn đang làm</div>
+            <h1>Cả đội hôm nay xong {Math.round(teamPct * 100)}%</h1>
+            <div className="summary">
+              <span>Đã đăng <b>{sum('a')}/{sum('b')}</b> bài</span>
+              <span>Đã trả lời <b>{sum('c')}/{sum('d')}</b> bài</span>
+              <span>Còn <b>{leftT}</b> bài cần trả lời</span>
+              <span>Kho ý tưởng còn <b>{extra.freeIdeas}</b> câu</span>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Số liệu nhanh hôm nay (kiểu Stripe) */}
-      <div className="kpis kpis4">
-        <div className="kpi"><div className="lbl">Hoàn thành</div><div className="v">{Math.round(teamPct * 100)}%</div><div className="mini">{working}/{todayS.length} bạn đang làm</div></div>
-        <div className="kpi"><div className="lbl">Bài đã đăng</div><div className="v">{sum('a')}<small> / {sum('b')}</small></div><div className="mini">hôm qua {sumY('a')}</div></div>
-        <div className="kpi"><div className="lbl">Bài đã trả lời</div><div className="v">{sum('c')}<small> / {sum('d')}</small></div><div className="mini">hôm qua {sumY('c')}</div></div>
-        <div className="kpi"><div className="lbl">Điểm TB của bot</div><div className="v">{ydayAvg ? '★ ' + ydayAvg.toFixed(1).replace('.', ',') : '—'}</div><div className="mini">bài hôm qua, thang 5</div></div>
-      </div>
-
-      <section className="card">
-        <div className="card-h"><h2>Cần bạn xem</h2><span className="count sub">{todo.length ? `${todo.length} việc` : ''}</span></div>
-        {todo.length === 0 ? (
-          <div className="all-done"><Mascot who="tichtich" pose="cheer" className="" /><div><h3>Không có gì cần xem</h3><div className="sub">Đội đang chạy tốt.</div></div></div>
-        ) : (
-          <div className="next">
-            {todo.slice(0, 4).map((a, i) => (
-              <div key={i} className={'todo ' + a.c}>
-                <span className="dot" />
-                <div className="next-txt">{a.t}<span className="sub">{a.s}</span></div>
-                {a.go && <button className="btn sm ghost" onClick={a.go}>Xem</button>}
+      {members.length === 0 && <p className="empty">Chưa có nhân viên. Thiện thêm ở Cài đặt.</p>}
+      <div className="people2">
+        {todayS.map(({ m, s }) => {
+          const a = avg7(m)
+          const last = lastAct(m)
+          const mine = m.id === me.id
+          return (
+            <div key={m.id} className={'pcard' + (mine ? ' mine' : '')} onClick={() => onOpen(m.id)} role="button" tabIndex={0}>
+              <div className="phead">
+                <span className="avatar">{initials(m.name)}</span>
+                <div style={{ minWidth: 0 }}><b>{m.name}</b><span className="sub">{s.cls === 'r' ? 'Chưa làm gì hôm nay' : last ? `Vừa ${last.kind === 'post' ? 'đăng bài' : 'trả lời bài'} lúc ${timeVN(last.created_at)}` : 'Đang làm'}</span></div>
+                <div className="pct">{Math.round(s.pct * 100)}%</div>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="card">
-        <div className="card-h">
-          <h2>Đội nhóm</h2>
-          <div className="row" style={{ marginLeft: 'auto' }}>
-            <button className="btn sm ghost" aria-label="Tuần trước" onClick={() => { setEnd(addDays(end, -7)); setSel(null) }}>‹</button>
-            <span className="sub" style={{ whiteSpace: 'nowrap' }}>{ddmm(start)}–{ddmm(end)}</span>
-            <button className="btn sm ghost" aria-label="Tuần sau" disabled={end >= today} onClick={() => { setEnd(end >= addDays(today, -7) ? today : addDays(end, 7)); setSel(null) }}>›</button>
-          </div>
-        </div>
-        {members.length === 0 && <p className="empty">Chưa có nhân viên. Thêm ở Cài đặt.</p>}
-        <div className="plist">
-          {todayS.map(({ m, s }) => {
-            const status = s.cls === 'g' ? ['ok', 'Đủ'] : s.cls === 'r' ? ['bad', 'Chưa làm'] : ['warn', 'Đang làm']
-            return (
-              <div key={m.id}>
-                <div className={'prow' + (sel?.m.id === m.id ? ' on' : '')} onClick={() => open(m, today)}>
-                  <Ring value={Math.round(s.pct * 100)} total={100} size={52} stroke={6} track="#f6e6dd">{Math.round(s.pct * 100)}<small>%</small></Ring>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="prow-name">{m.name} <span className={'chip ' + status[0]}>{status[1]}</span></div>
-                    <div className="prow-stats">
-                      <span title="Việc">☑️ {s.x}/{s.y}</span>
-                      <span title="Bài đăng">📝 {s.a}/{s.b}</span>
-                      <span title="Comment">💬 {s.c}/{s.d}</span>
-                    </div>
-                    <div className="days7" onClick={(e) => e.stopPropagation()}>
-                    {days.map((dd) => {
-                      const st = dayStat(m, dd, data, routines, today)
-                      return <button key={dd} className={`d ${st.cls}${sel?.m.id === m.id && sel?.d === dd ? ' sel' : ''}`} disabled={st.cls === 'n'} title={`${weekday(dd)} ${ddmm(dd)}`} onClick={() => open(m, dd)} />
-                    })}
-                    </div>
-                  </div>
+              <div className="pnums">
+                <div className="pnum"><div className="lbl">Bài đăng</div><div className="v">{s.a}<small> / {s.b}</small></div></div>
+                <div className="pnum"><div className="lbl">Bài trả lời</div><div className="v">{s.c}<small> / {s.d}</small></div></div>
+                <div className="pnum"><div className="lbl">Điểm bot 7 ngày</div><div className="v">{a ? '★ ' + a.toFixed(1).replace('.', ',') : '—'}</div></div>
+              </div>
+              <div className="pfoot">
+                <span>7 ngày</span>
+                <div className="days7" onClick={(e) => e.stopPropagation()}>
+                  {days.map((dd) => {
+                    const st = dayStat(m, dd, data, routines, today)
+                    return <button key={dd} className={`d ${st.cls}${sel?.m.id === m.id && sel?.d === dd ? ' sel' : ''}`} disabled={st.cls === 'n'} title={`${weekday(dd)} ${ddmm(dd)}`} onClick={() => open(m, dd)} />
+                  })}
                 </div>
-                {sel?.m.id === m.id && <Detail m={sel.m} d={sel.d} data={data} routines={routines} onClose={() => setSel(null)} />}
               </div>
-            )
-          })}
-        </div>
-        <div className="mini" style={{ marginTop: 8 }}>Chấm màu = 7 ngày: <b style={{ color: 'var(--green)' }}>xanh</b> đủ · <b style={{ color: 'var(--yellow)' }}>vàng</b> thiếu · <b style={{ color: 'var(--red)' }}>đỏ</b> không làm. Bấm để xem.</div>
+              <div className="cta-me">{mine ? 'Vào việc của tôi →' : `Xem việc của ${shortName(m.name)} →`}</div>
+            </div>
+          )
+        })}
+      </div>
+      {sel && <Detail m={sel.m} d={sel.d} data={data} routines={routines} onClose={() => setSel(null)} />}
+
+      {isAdmin && (
+        <section className="card">
+          <div className="card-h"><h2>Cần bạn xem</h2><span className="count sub">{todo.length ? `${todo.length} việc` : ''}</span></div>
+          {todo.length === 0 ? <p className="empty">Không có gì cần xem. Đội đang chạy tốt.</p> : (
+            <div className="next">
+              {todo.slice(0, 4).map((x, i) => (
+                <div key={i} className={'todo ' + x.c}>
+                  <span className="dot" />
+                  <div className="next-txt">{x.t}<span className="sub">{x.s}</span></div>
+                  {x.go && <button className="btn sm ghost" onClick={x.go}>Xem</button>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="card">
+        <div className="card-h"><h2>Vừa làm</h2><span className="count sub">hôm nay, mới nhất trước</span></div>
+        {feed.length === 0 && <p className="empty">Hôm nay chưa ai làm gì.</p>}
+        {feed.map((f, i) => (
+          <div key={i} className="feed-row">
+            <span className="avatar sm">{initials(nameOf[f.who] || '?')}</span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div><b>{shortName(nameOf[f.who] || 'Ai đó')} {f.t}</b>{f.s && <span className="feed-s"> “{f.s}”</span>}</div>
+              <div className="sub">{f.g ? f.g + ' · ' : ''}{timeVN(f.at)}{f.url && <> · <a href={f.url} target="_blank" rel="noreferrer">xem ↗</a></>}</div>
+            </div>
+          </div>
+        ))}
       </section>
 
-      <details className="card more-card">
-        <summary><h2>Báo cáo bot</h2><span className="sub">{extra.reports.length ? longDate(extra.reports[0].date) : 'chưa có'}</span></summary>
-        {extra.reports.slice(0, 5).map((r) => <div key={r.id} className="report"><b>{longDate(r.date)}</b>{'\n'}{r.text}</div>)}
-        <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={() => go('effect')}>Xem hiệu quả seeding →</button>
-      </details>
+      {isAdmin && extra.reports.length > 0 && (
+        <details className="card more-card">
+          <summary><h2>Báo cáo bot</h2><span className="sub">{longDate(extra.reports[0].date)}</span></summary>
+          {extra.reports.slice(0, 5).map((r) => <div key={r.id} className="report"><b>{longDate(r.date)}</b>{'\n'}{r.text}</div>)}
+        </details>
+      )}
     </>
   )
 }
@@ -185,7 +200,6 @@ function Detail({ m, d, data, routines, onClose }) {
   const checks = data.checks.filter((c) => c.member_id === m.id && c.date === d)
   const extras = data.extras.filter((e) => e.member_id === m.id && e.date === d)
   const posts = data.posts.filter((p) => p.member_id === m.id && p.date === d)
-  const note = data.notes.find((n) => n.member_id === m.id && n.date === d)
   return (
     <section className="pdetail">
       <div className="card-h">
@@ -201,11 +215,10 @@ function Detail({ m, d, data, routines, onClose }) {
             return <div key={r.id} className="stat-row"><span>{c?.done ? '✅' : '⬜'} {r.title}{c?.note ? <span className="sub"> — {c.note}</span> : null}</span></div>
           })}
           {extras.map((e) => <div key={e.id} className="stat-row"><span>{e.done ? '✅' : '⬜'} {e.title} <span className="sub">(phát sinh)</span></span></div>)}
-          <h3 style={{ marginTop: 14 }}>Chốt ngày</h3>
-          <p style={{ margin: '4px 0' }}>{note?.note || <span className="sub">Chưa chốt ngày.</span>}</p>
+
         </div>
         <div>
-          <h3>Seeding · Bài {posts.filter((p) => p.kind === 'post').length}/{m.seeding_quota} · Comment {posts.filter((p) => p.kind === 'comment').length}/{m.comment_quota ?? 0}</h3>
+          <h3>Seeding · Bài đăng {posts.filter((p) => p.kind === 'post').length}/{m.seeding_quota} · Bài trả lời {posts.filter((p) => p.kind === 'comment').length}/{m.comment_quota ?? 0}</h3>
           {posts.length === 0 && <p className="empty">Không có link nào.</p>}
           {posts.map((p, i) => (
             <div key={p.id} className="post">

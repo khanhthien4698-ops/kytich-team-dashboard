@@ -49,20 +49,27 @@ export default function App() {
   )
 }
 
+// Ai cũng có "Cả đội" + "Việc của tôi"; admin thêm Hiệu quả, Cài đặt (Thiện chốt 06/11)
+const STAFF_TABS = [
+  { id: 'board', ic: '👥', label: 'Cả đội' },
+  { id: 'today', ic: '✅', label: 'Việc của tôi' },
+]
 const ADMIN_TABS = [
-  { id: 'board', ic: '📊', label: 'Tổng quan' },
-  { id: 'today', ic: '✅', label: 'Hôm nay' },
+  ...STAFF_TABS,
   { id: 'effect', ic: '📈', label: 'Hiệu quả' },
   { id: 'settings', ic: '⚙️', label: 'Cài đặt' },
 ]
 
 function Shell({ me }) {
   const isAdmin = me.role === 'admin'
+  const TABS = isAdmin ? ADMIN_TABS : STAFF_TABS
   const [tab, setTab] = useState(() => {
     const h = location.hash.slice(1)
-    return isAdmin && ADMIN_TABS.some((t) => t.id === h) ? h : isAdmin ? 'board' : 'today'
+    return TABS.some((t) => t.id === h) ? h : 'board'
   })
-  const go = (t) => { setTab(t); history.replaceState(null, '', '#' + t); scrollTo({ top: 0 }) }
+  const [viewId, setViewId] = useState(null) // xem "Việc của tôi" của người khác
+  const go = (t) => { setTab(t); if (t === 'today') setViewId(null); history.replaceState(null, '', '#' + t); scrollTo({ top: 0 }) }
+  const openMember = (id) => { setViewId(id === me.id ? null : id); setTab('today'); history.replaceState(null, '', '#today'); scrollTo({ top: 0 }) }
   const [menu, setMenu] = useState(false)
   const [pwOpen, setPwOpen] = useState(false)
   const tourKey = `kt_tour_${me.id}`
@@ -86,12 +93,9 @@ function Shell({ me }) {
       <header className="topbar">
         <div className="topbar-in">
           <div className="brand"><span className="logo">KT</span><div>Đội nhóm Kỳ Tích<small>Aptis Kỳ Tích</small></div></div>
-          {isAdmin && (
-            <nav className="nav">
-              {ADMIN_TABS.map((t) => <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => go(t.id)}>{t.label}</button>)}
-              <button disabled title="Sẽ làm sau">Khách (sắp có)</button>
-            </nav>
-          )}
+          <nav className="nav">
+            {TABS.map((t) => <button key={t.id} className={tab === t.id && !(t.id === 'today' && viewId) ? 'on' : ''} onClick={() => go(t.id)}>{t.label}</button>)}
+          </nav>
           <div className="me">
             <button className="icon-btn" title="Hướng dẫn" onClick={() => setTour(true)}>?</button>
             <button className="avatar" title={me.name} onClick={() => setMenu((v) => !v)}>{initials(me.name)}</button>
@@ -108,17 +112,15 @@ function Shell({ me }) {
       </header>
 
       <main className="wrap">
-        {tab === 'today' && <Today me={me} hasNav={isAdmin} />}
-        {tab === 'board' && isAdmin && <Board go={go} />}
+        {tab === 'today' && <Today me={me} hasNav viewId={viewId} onView={(id) => { setViewId(id); scrollTo({ top: 0 }) }} />}
+        {tab === 'board' && <Board me={me} onOpen={openMember} />}
         {tab === 'effect' && isAdmin && <Effect />}
         {tab === 'settings' && isAdmin && <Settings me={me} />}
       </main>
 
-      {isAdmin && (
-        <nav className="bottom-nav">
-          {ADMIN_TABS.map((t) => <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => go(t.id)}><span className="ic">{t.ic}</span>{t.label}</button>)}
-        </nav>
-      )}
+      <nav className="bottom-nav">
+        {TABS.map((t) => <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => go(t.id)}><span className="ic">{t.ic}</span>{t.label}</button>)}
+      </nav>
 
       {pwOpen && <PasswordSheet onClose={() => setPwOpen(false)} />}
       {tour && <Tour kind={isAdmin ? 'admin' : 'staff'} onClose={closeTour} />}

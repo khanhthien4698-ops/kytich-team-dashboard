@@ -131,3 +131,22 @@ export async function setTargetStatus(id, status) {
   if (!ok) throw new Error('Không đổi được trạng thái (có thể người khác đã nhận).')
 }
 export const completeTarget = (id, url) => q(sb.rpc('complete_target', { p_target: id, p_url: url }))
+// Trả lời xong: lưu câu đã comment (bot kiểm tra sáng hôm sau)
+export const answerTarget = (id, text) => q(sb.rpc('answer_target', { p_target: id, p_text: text }))
+
+// Kho ý tưởng chung: 30 câu chưa ai lấy + các câu đang/đã đăng trong 7 ngày
+export async function listIdeaPool(today) {
+  const [free, taken] = await Promise.all([
+    q(sb.from('seed_ideas').select('*').is('taken_by', null).is('skipped_at', null).order('created_at').limit(30)),
+    q(sb.from('seed_ideas').select('*').gte('taken_at', addDays(today, -7) + 'T00:00:00+07:00').order('taken_at', { ascending: false })),
+  ])
+  return { free, taken }
+}
+export async function countFreeIdeas() {
+  const { data, count, error } = await sb.from('seed_ideas').select('id', { count: 'exact', head: true }).is('taken_by', null).is('skipped_at', null)
+  if (error) throw new Error(error.message)
+  return count ?? data?.length ?? 0
+}
+export const skipIdea = (id) => q(sb.rpc('skip_idea', { p_idea: id }))
+export const listSkippedIdeasSince = (since) =>
+  q(sb.from('seed_ideas').select('id,question,skipped_by,skipped_at').gte('skipped_at', since).order('skipped_at', { ascending: false }))

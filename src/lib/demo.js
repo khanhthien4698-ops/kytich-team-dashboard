@@ -45,7 +45,14 @@ function seed() {
     ['Listening', 'sao e nghe đc keyword mà vẫn chọn sai hoài vậy ad', 'zalo', '30/10 07:52', 1, 'Vì đề hay gài từ phủ định với đổi ý ở cuối câu đó em. Nghe hết câu rồi mới chọn, đừng chọn ngay khi nghe thấy keyword.'],
     ['Writing', 'writing part 4 email trang trọng mở đầu sao cho đúng ạ, e hay viết dear friend', 'zalo', '30/10 06:31', 1, 'Email trang trọng thì mở bằng Dear Sir/Madam hoặc Dear Mr/Ms + họ nhé em, Dear friend chỉ dùng cho email thân mật thôi.'],
   ]
-  const seed_ideas = asks.map(([topic, question, src, at, n, ans], i) => ({ id: uid(), date: today, topic, question, angle: 'meta:' + JSON.stringify({ src, at, n, ans }), gift_doc: null, assigned_to: null, taken_by: i === 0 ? staff[0].id : i === 1 ? staff[1].id : null, taken_at: null }))
+  // Kho ý tưởng chung: ~40 câu (lặp lại mẫu), 2 câu đang có người đăng
+  const seed_ideas = Array.from({ length: 40 }, (_, i) => {
+    const [topic, question, src, at, n, ans] = asks[i % asks.length]
+    const q = i < asks.length ? question : `${question} (${Math.floor(i / asks.length) + 1})`
+    return { id: uid(), date: today, topic, question: q, angle: 'meta:' + JSON.stringify({ src, at, n, ans }), gift_doc: null, assigned_to: null,
+      taken_by: i === 0 ? staff[0].id : i === 1 ? staff[1].id : null, taken_at: i <= 1 ? new Date().toISOString() : null, skipped_by: null, skipped_at: null,
+      created_at: new Date(Date.now() - (40 - i) * 60000).toISOString() }
+  })
   const team_reports = [
     { id: uid(), date: today, member_id: null, text: 'Hôm qua: Thành viên 1 đủ việc 3/3, seeding 5/5. Thành viên 2 việc 2/3, seeding 3/5 (thiếu 2). Thành viên 3 chưa ghi gì.\nTrung bình 7 ngày: 4,1 bài/người/ngày.', created_at: new Date().toISOString() },
     { id: uid(), date: today, member_id: staff[1].id, text: 'Hôm qua bạn làm 2/3 việc, seeding 3/5. Hôm nay nhớ bù 2 bài nhé.', created_at: new Date().toISOString() },
@@ -164,6 +171,14 @@ export const demoClient = {
       if (!t || t.status === 'commented' || t.status === 'skipped' || (t.taken_by && t.taken_by !== m.id)) return { data: null, error: { message: 'Cơ hội này đã có người khác nhận' } }
       const post = { id: uid(), date: today, member_id: m.id, url: arguments[1].p_url, group_id: t.group_id, group_name: t.group_name, kind: 'comment', question: t.question, target_id: t.id, idea_id: null, created_at: new Date().toISOString() }
       db.seeding_posts.push(post); Object.assign(t, { status: 'commented', taken_by: m.id, post_id: post.id }); return { data: post.id, error: null }
+    }
+    if (fn === 'skip_idea') { if (!idea || idea.taken_by || idea.skipped_at) return { data: false, error: null }; Object.assign(idea, { skipped_by: m.id, skipped_at: new Date().toISOString() }); return { data: true, error: null } }
+    if (fn === 'answer_target') {
+      const txt = (arguments[1].p_text || '').trim()
+      if (txt.length < 5) return { data: null, error: { message: 'Dán câu bạn đã comment (ít nhất 5 ký tự)' } }
+      if (!t || t.status === 'commented' || t.status === 'skipped' || (t.taken_by && t.taken_by !== m.id)) return { data: null, error: { message: 'Bài này đã có người khác nhận' } }
+      const post = { id: uid(), date: today, member_id: m.id, url: t.url, group_id: t.group_id, group_name: t.group_name, kind: 'comment', question: t.question, target_id: t.id, idea_id: null, created_at: new Date().toISOString() }
+      db.seeding_posts.push(post); Object.assign(t, { status: 'commented', taken_by: m.id, post_id: post.id, comment_text: txt }); return { data: post.id, error: null }
     }
     if (fn === 'release_idea') { if (!idea || (idea.taken_by !== m.id && m.role !== 'admin')) return { data: false, error: null }; idea.taken_by = null; return { data: true, error: null } }
     return { data: null, error: { message: 'rpc không có trong demo' } }

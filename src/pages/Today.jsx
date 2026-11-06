@@ -3,7 +3,7 @@ import * as api from '../lib/api.js'
 import { vnToday, addDays, longDate, timeVN, ddmm } from '../lib/date.js'
 import { useToast } from '../App.jsx'
 import Review from '../components/Review.jsx'
-import { Mascot, Ring, Sheet, poseFor, greet, store, shortName } from '../components/ui.jsx'
+import { Mascot, Sheet, greet, store, shortName } from '../components/ui.jsx'
 
 export const KIND = { post: 'Bài đăng', comment: 'Trả lời bài người khác' }
 export const KIND_SHORT = { post: 'Bài đăng', comment: 'Trả lời' }
@@ -20,57 +20,60 @@ export function detectLink(url, groups) {
 
 const scrollToId = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-export default function Today({ me, hasNav }) {
+// Chỉ đăng bài seeding ở 2 group này (Thiện chốt 06/11)
+export const POST_GROUPS = ['Key Aptis miễn phí - update liên tục', 'Hội review đề Aptis có tâm']
+const vnDate = (ts) => ts && new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(ts))
+
+export default function Today({ me, hasNav, viewId, onView }) {
   const notify = useToast()
   const isAdmin = me.role === 'admin'
   const [date, setDate] = useState(vnToday())
   const [members, setMembers] = useState([])
-  const [whoId, setWhoId] = useState(me.id)
+  const whoId = viewId || me.id
   const [d, setD] = useState(null)
   const [quick, setQuick] = useState(null) // { kind, ideaId, target }
-  const [pickTab, setPickTab] = useState('comment')
+  const [pickTab, setPickTab] = useState('post')
   const [seenAt, setSeenAt] = useState('')
   const who = members.find((m) => m.id === whoId) || me
+  // Xem việc của người khác: chỉ xem, không bấm được (trừ admin)
+  const readOnly = who.id !== me.id && !isAdmin
 
   const load = useCallback(async () => {
     const t = vnToday()
     const y = addDays(t, -1)
     setDate(t)
     try {
-      const [ms, rs, day, ideas, gs, targets, yday, yrev, fb, hist] = await Promise.all([
-        api.listMembers(), api.listRoutines(whoId), api.getDay(whoId, t), api.listIdeas(t), api.listGroups(),
+      const [ms, rs, day, pool, gs, targets, yday, yrev, fb, hist, teamPosts] = await Promise.all([
+        api.listMembers(), api.listRoutines(whoId), api.getDay(whoId, t), api.listIdeaPool(t), api.listGroups(),
         api.listActiveTargets(t), api.getDay(whoId, y), api.listReviewsSince(y), api.getFeedback(whoId, y),
-        api.listPostsRange(addDays(t, -14), y),
+        api.listPostsRange(addDays(t, -14), y), api.listPostsRange(addDays(t, -7), t),
       ])
       setMembers(ms)
       setD({
-        routines: rs.filter((r) => r.active), day, ideas, groups: gs.filter((g) => g.active), targets,
+        routines: rs.filter((r) => r.active), day, pool, groups: gs.filter((g) => g.active), targets, teamPosts,
         yday: { posts: yday.posts, reviewOf: Object.fromEntries(yrev.map((r) => [r.post_id, r])), fb },
         hist: hist.filter((p) => p.member_id === whoId),
       })
     } catch (x) { notify(x.message, true) }
   }, [whoId, notify])
 
-  useEffect(() => { load() }, [load])
-  // Bot quét group khoảng 3 tiếng/lần: để tab mở thì cứ 10 phút tự tải lại
+  useEffect(() => { setD(null); load() }, [load])
+  // Bot quét group khoảng 3 tiếng/lần: để tab mở thì cứ 5 phút tự tải lại
   useEffect(() => {
-    const i = setInterval(() => document.visibilityState === 'visible' && load(), 10 * 60 * 1000)
-    return () => clearInterval(i)
+    const i = setInterval(() => document.visibilityState === 'visible' && load(), 5 * 60 * 1000)
+    const f = () => document.visibilityState === 'visible' && load()
+    document.addEventListener('visibilitychange', f)
+    return () => { clearInterval(i); document.removeEventListener('visibilitychange', f) }
   }, [load])
   const seenKey = `kt_tseen_${whoId}`
   useEffect(() => { setSeenAt(store.get(seenKey) || '') }, [seenKey])
-  useEffect(() => {
-    const f = () => document.visibilityState === 'visible' && load()
-    document.addEventListener('visibilitychange', f)
-    return () => document.removeEventListener('visibilitychange', f)
-  }, [load])
 
   const nameOf = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members])
   if (!d) return <p className="empty">Đang tải…</p>
   const setDay = (fn) => setD((x) => ({ ...x, day: fn(x.day) }))
 
   // ---- Số liệu hôm nay ----
-  const { routines, day, ideas, groups, targets, yday, hist } = d
+  const { routines, day, pool, groups, targets, teamPosts, yday } = d
   const checkOf = (rid) => day.checks.find((c) => c.routine_id === rid)
   const doneR = routines.filter((r) => checkOf(r.id)?.done).length + day.extras.filter((e) => e.done).length
   const totalR = routines.length + day.extras.length
@@ -80,153 +83,78 @@ export default function Today({ me, hasNav }) {
   const qCmt = who.comment_quota ?? 0
   const units = totalR + qPost + qCmt
   const pct = units ? (doneR + Math.min(nPost, qPost) + Math.min(nCmt, qCmt)) / units : 0
-  const streak = calcStreak(hist, qPost, qCmt, date, nPost >= qPost && nCmt >= qCmt)
+  const leftT = targets.filter((t) => (t.status === 'new' && t.assigned_to === who.id) || (t.status === 'taken' && t.taken_by === who.id)).length
+  const yScores = yday.posts.map((p) => yday.reviewOf[p.id]?.score).filter(Boolean)
+  const yAvg = yScores.length ? yScores.reduce((a, b) => a + b, 0) / yScores.length : null
   const fbKey = `kt_fb_${who.id}_${addDays(date, -1)}`
   const fbSeen = !!store.get(fbKey)
 
   async function toggle(r, patch) {
+    if (readOnly) return
     const cur = checkOf(r.id)
     const row = { date, member_id: who.id, routine_id: r.id, done: cur?.done ?? false, note: cur?.note ?? null, ...patch }
     setDay((x) => ({ ...x, checks: [...x.checks.filter((c) => c.routine_id !== r.id), row] }))
     try { await api.saveCheck(row) } catch (x) { notify(x.message, true); load() }
   }
-  async function doneTarget(t) {
-    try { await api.completeTarget(t.id, t.url); notify('Đã ghi. Cảm ơn bạn!') } catch (x) { notify(x.message, true) }
-    load()
-  }
-  async function take(t) {
-    try { await api.takeTarget(t.id); notify('Đã nhận. Trả lời xong thì tích "Đã trả lời bài này".') } catch (x) { notify(x.message, true) }
-    load()
-  }
 
-  // ---- Kỳ Kỳ gợi ý việc tiếp theo ----
-  const next = []
-  const myTaken = targets.filter((t) => t.status === 'taken' && t.taken_by === who.id)
-  const openTargets = targets.filter((t) => t.status === 'new')
-  const myOpen = openTargets.filter((t) => t.assigned_to === who.id)
   // Bài bot mới tìm thấy kể từ lần cuối bạn xem
-  const freshT = openTargets.filter((t) => t.created_at > seenAt)
+  const freshT = targets.filter((t) => t.status === 'new' && t.created_at > seenAt && t.assigned_to === who.id)
   const lastFound = freshT.reduce((m, t) => (t.created_at > m ? t.created_at : m), '')
   const seeFresh = () => {
     store.set(seenKey, lastFound); setSeenAt(lastFound)
-    setPickTab('comment'); scrollToId('s2')
+    setPickTab('comment'); scrollToId('seeding')
   }
-  const myIdea = ideas.find((i) => i.taken_by === who.id && !day.posts.some((p) => p.idea_id === i.id))
-  const freeIdeas = ideas.filter((i) => !i.taken_by)
-  if (yday.fb && !fbSeen) next.push({ ic: '💬', t: 'Đọc góp ý của bot cho bài hôm qua', s: yday.fb.text.slice(0, 70) + (yday.fb.text.length > 70 ? '…' : ''), btn: 'Đọc', go: () => { store.set(fbKey, '1'); scrollToId('s1'); load() } })
-  if (myTaken.length) next.push({ ic: '✍️', t: `Bạn đang giữ ${myTaken.length} bài chưa trả lời`, s: myTaken[0].question, btn: 'Đã trả lời', go: () => doneTarget(myTaken[0]) })
-  else if (nCmt < qCmt && openTargets.length) {
-    const t = myOpen[0] || openTargets[0]
-    next.push({ ic: '🎯', t: `Trả lời thêm ${qCmt - nCmt} bài để đủ chỉ tiêu`, s: t.question, btn: 'Nhận bài', go: () => take(t) })
-  } else if (nCmt < qCmt) next.push({ ic: '💭', t: `Còn ${qCmt - nCmt} bài trả lời nữa`, s: 'Tìm bài hỏi về Aptis trong group, trả lời thật có ích rồi dán link', btn: 'Thêm link', go: () => setQuick({ kind: 'comment' }) })
-  if (nPost < qPost) {
-    if (myIdea) next.push({ ic: '📝', t: `Viết bài từ ý tưởng “${myIdea.topic}”`, s: `Còn ${qPost - nPost} bài đăng`, btn: 'Ghi link', go: () => setQuick({ kind: 'post', ideaId: myIdea.id }) })
-    else if (freeIdeas.length) next.push({ ic: '💡', t: `Nhận 1 ý tưởng để viết bài (còn ${qPost - nPost} bài)`, s: `${freeIdeas.length} ý tưởng chưa ai nhận`, btn: 'Xem ý tưởng', go: () => scrollToId('s2') })
-    else next.push({ ic: '📝', t: `Còn ${qPost - nPost} bài đăng nữa`, s: 'Đăng xong dán link vào là được', btn: 'Ghi', go: () => setQuick({ kind: 'post' }) })
-  }
-  const undone = routines.find((r) => !checkOf(r.id)?.done)
-  if (undone) next.push({ ic: '☑️', t: undone.title, s: 'Việc cố định hằng ngày', btn: 'Xong', go: () => toggle(undone, { done: true }) })
-  if (!day.note && pct >= 1) next.push({ ic: '🌙', t: 'Chốt ngày bằng 1 câu', s: 'Hôm nay làm được gì, vướng gì?', btn: 'Chốt', go: () => scrollToId('s4') })
-  const first = next[0]
-  const bubble = pct >= 1 && day.note ? 'Xong hết rồi! Hôm nay bạn làm tuyệt lắm 🎉'
-    : first ? `Tiếp theo: ${first.t.charAt(0).toLowerCase() + first.t.slice(1)}.`
-    : 'Mọi thứ đang ổn. Cố lên nhé!'
+  const firstName = shortName(who.name)
 
   return (
     <>
-      {isAdmin && (
-        <div className="row" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
-          <span className="sub">Xem ngày của:</span>
-          <select className="input" style={{ width: 'auto' }} value={whoId} onChange={(e) => { setD(null); setWhoId(e.target.value) }}>
-            {members.filter((m) => m.active && m.role !== 'bot').map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        </div>
-      )}
-
-      {/* ---- Đầu trang: Kỳ Kỳ + vòng tiến độ ---- */}
+      {/* ---- Đầu trang: 1 dòng tóm tắt ---- */}
       <section className="hero">
         <div className="hero-top">
-          <Mascot who="kyky" pose={poseFor(pct)} />
           <div>
-            <div className="hero-hello">{greet()} · {longDate(date)}</div>
-            <h1>{who.id === me.id ? shortName(who.name) : who.name} ơi, hôm nay xong {Math.round(pct * 100)}%</h1>
-            <div className="bubble">{bubble}</div>
-            {streak > 0 && <div className="streak">🔥 {streak} ngày liền đủ chỉ tiêu</div>}
+            <div className="hero-hello">{greet()} · {longDate(date)}{who.id !== me.id && ' · đang xem việc của ' + who.name}</div>
+            <h1>{who.id === me.id ? `Chào ${firstName}, hôm nay bạn xong ${Math.round(pct * 100)}%` : `${who.name} hôm nay xong ${Math.round(pct * 100)}%`}</h1>
+            <div className="bar hero-bar"><span style={{ width: Math.round(pct * 100) + '%' }} /></div>
+            <div className="summary">
+              <span>Đã đăng <b>{nPost}/{qPost}</b> bài</span>
+              <span>Đã trả lời <b>{nCmt}/{qCmt}</b> bài</span>
+              <span>Còn <b>{leftT}</b> bài cần trả lời</span>
+              {yAvg && <span>Điểm bot hôm qua <b>★ {yAvg.toFixed(1).replace('.', ',')}</b></span>}
+            </div>
           </div>
-        </div>
-        <div className="rings">
-          <div className="ring-box"><Ring value={doneR} total={totalR} /><span className="lbl">Việc</span></div>
-          <div className="ring-box"><Ring value={nPost} total={qPost} /><span className="lbl">Bài đăng</span></div>
-          <div className="ring-box"><Ring value={nCmt} total={qCmt} /><span className="lbl">Bài trả lời</span></div>
         </div>
       </section>
 
-      {freshT.length > 0 && (
+      {who.id !== me.id && <div className="viewing">Bạn đang xem việc của <b>{who.name}</b>{readOnly && ' (chỉ xem)'} · <button className="linkbtn" onClick={() => onView?.(null)}>Về việc của tôi</button></div>}
+
+      {!readOnly && freshT.length > 0 && (
         <section className="fresh">
           <span className="fresh-bell">🔔</span>
           <div className="fresh-txt">
-            <b>{freshT.length} bài mới cần trả lời</b>
-            <span>Bot vừa tìm thấy lúc {timeVN(lastFound)}{freshT.some((t) => t.assigned_to === who.id) ? ` · ${freshT.filter((t) => t.assigned_to === who.id).length} bài giao cho bạn` : ''}. Vào nhận trước khi bài trôi nhé!</span>
+            <b>{freshT.length} bài mới giao cho bạn</b>
+            <span>Bot vừa tìm thấy lúc {timeVN(lastFound)}. Vào nhận trước khi bài trôi nhé!</span>
           </div>
           <button className="btn sm" onClick={seeFresh}>Xem ngay</button>
         </section>
       )}
 
-      <div className="grid2">
-        {/* ---- Việc tiếp theo ---- */}
-        <section className="card">
-          <div className="card-h"><h2>Việc tiếp theo</h2></div>
-          {next.length === 0 ? (
-            <div className="all-done">
-              <Mascot who="kyky" pose="trophy" className="" />
-              <div><h3>Xong hết rồi!</h3><div className="sub">Đủ việc, đủ bài đăng, đủ bài trả lời{day.note ? ', đã chốt ngày' : ''}. Nghỉ ngơi thôi.</div></div>
-            </div>
-          ) : (
-            <div className="next">
-              {next.slice(0, 4).map((n, i) => (
-                <div key={i} className={'next-item' + (i === 0 ? ' first' : '')}>
-                  <span className="next-ic">{n.ic}</span>
-                  <div className="next-txt">{n.t}{n.s && <span className="sub">{n.s}</span>}</div>
-                  <button className={'btn sm' + (i === 0 ? '' : ' ghost')} onClick={n.go}>{n.btn}</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+      <Seeding tab={pickTab} setTab={setPickTab} seenAt={seenAt} who={who} me={me} readOnly={readOnly} targets={targets} pool={pool}
+        teamPosts={teamPosts} groups={groups} nameOf={nameOf} date={date} nPost={nPost} qPost={qPost} nCmt={nCmt} qCmt={qCmt} reload={load} />
 
+      <div className="grid2">
         <Feedback yday={yday} seen={fbSeen} onSeen={() => store.set(fbKey, '1')} />
+        <Tasks routines={routines} day={day} setDay={setDay} checkOf={checkOf} toggle={toggle} date={date} who={who} reload={load} doneR={doneR} totalR={totalR} readOnly={readOnly} />
       </div>
 
-      <PickWork tab={pickTab} setTab={setPickTab} seenAt={seenAt} who={who} me={me} targets={targets} ideas={ideas} nameOf={nameOf} date={date} reload={load}
-        onComment={(t) => setQuick({ kind: 'comment', target: t })} onWrite={(i) => setQuick({ kind: 'post', ideaId: i.id })} />
+      <SeedLog day={day} setDay={setDay} nPost={nPost} nCmt={nCmt} qPost={qPost} qCmt={qCmt} onAdd={() => setQuick({})} readOnly={readOnly} />
 
-      <div className="grid2">
-        <Tasks routines={routines} day={day} setDay={setDay} checkOf={checkOf} toggle={toggle} date={date} who={who} reload={load} doneR={doneR} totalR={totalR} />
-        <SeedLog day={day} setDay={setDay} nPost={nPost} nCmt={nCmt} qPost={qPost} qCmt={qCmt} onAdd={() => setQuick({})} />
-      </div>
-
-      <DayNote date={date} who={who} note={day.note} setDay={setDay} ready={pct >= 1} />
-
-      <button className={'fab' + (hasNav ? ' with-nav' : '')} onClick={() => setQuick({})}><span>+</span>Thêm link</button>
+      {!readOnly && <button className={'fab' + (hasNav ? ' with-nav' : '')} onClick={() => setQuick({})}><span>+</span>Thêm link</button>}
       {quick && (
-        <QuickAdd preset={quick} who={who} date={date} groups={groups} ideas={ideas} onClose={() => setQuick(null)}
+        <QuickAdd preset={quick} who={who} date={date} groups={groups} ideas={pool.taken} onClose={() => setQuick(null)}
           onSaved={(row) => { if (row) setDay((x) => ({ ...x, posts: [...x.posts, row] })); setQuick(null); load() }} />
       )}
     </>
   )
-}
-
-// Số ngày liền đủ chỉ tiêu seeding (tính đến hôm qua, cộng hôm nay nếu đã đủ)
-function calcStreak(hist, qPost, qCmt, today, todayFull) {
-  if (!qPost && !qCmt) return 0
-  let n = todayFull ? 1 : 0
-  for (let k = 1; k <= 14; k++) {
-    const dd = addDays(today, -k)
-    const ps = hist.filter((p) => p.date === dd)
-    if (ps.filter((p) => p.kind === 'post').length >= qPost && ps.filter((p) => p.kind === 'comment').length >= qCmt) n++
-    else break
-  }
-  return n
 }
 
 function StepHead({ no, done, title, hint, right }) {
@@ -301,62 +229,110 @@ function ideaMeta(i) {
   if (!i.angle?.startsWith('meta:')) return null
   try { return JSON.parse(i.angle.slice(5)) } catch { return null }
 }
-function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, reload, onComment, onWrite }) {
+function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPosts, groups, nameOf, date, nPost, qPost, nCmt, qCmt, reload }) {
   const notify = useToast()
   const [busy, setBusy] = useState(null)
-  // Bài còn mở nằm mãi trong danh sách (không hết hạn theo ngày) tới khi comment xong hoặc bị bỏ qua
-  const openT = targets.filter((t) => t.status === 'new' || t.status === 'taken')
-    .sort((a, b) => (b.status === 'taken' && b.taken_by === who.id) - (a.status === 'taken' && a.taken_by === who.id) || (b.created_at > a.created_at ? 1 : -1))
-  const vnDate = (ts) => ts && new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(ts))
-  const doneT = targets.filter((t) => t.status === 'commented' && (vnDate(t.taken_at) || t.date) === date)
-  const skippedT = targets.filter((t) => t.status === 'skipped')
-  const shownT = [...openT, ...doneT]
-  const newT = openT.filter((t) => t.status === 'new').length
-  const freeI = ideas.filter((i) => !i.taken_by).length
   const run = async (id, fn, ok) => {
     setBusy(id)
     try { await fn(); if (ok) notify(ok) } catch (x) { notify(x.message, true) }
     await reload(); setBusy(null)
   }
-  const mine = (x) => x.taken_by === who.id
-  const done = openT.every((t) => t.taken_by) && !ideas.some((i) => !i.taken_by && i.assigned_to === who.id)
+  const nm = (id) => (id === who.id ? (who.id === me.id ? 'Bạn' : shortName(who.name)) : shortName(nameOf[id] || 'Người khác'))
+
+  // ---- Ý tưởng đăng bài ----
+  const postOf = Object.fromEntries(teamPosts.filter((p) => p.idea_id).map((p) => [p.idea_id, p]))
+  const doing = pool.taken.filter((i) => !postOf[i.id])
+  const doneToday = pool.taken.filter((i) => postOf[i.id] && postOf[i.id].date === date)
+  const ideaRows = [...doing.filter((i) => i.taken_by === who.id), ...pool.free, ...doing.filter((i) => i.taken_by !== who.id), ...doneToday]
+
+  // ---- Bài cần trả lời ----
+  const openT = targets.filter((t) => t.status === 'new' || t.status === 'taken')
+    .sort((a, b) => rank(b) - rank(a) || (b.created_at > a.created_at ? 1 : -1))
+  function rank(t) { return (t.taken_by === who.id ? 4 : 0) + (t.assigned_to === who.id ? 2 : 0) + (t.status === 'new' ? 1 : 0) }
+  const doneT = targets.filter((t) => t.status === 'commented' && (vnDate(t.taken_at) || t.date) === date)
+  const skippedT = targets.filter((t) => t.status === 'skipped')
+  const myOpen = openT.filter((t) => (t.status === 'new' && t.assigned_to === who.id) || t.taken_by === who.id).length
+  const take = (t) => {
+    window.open(t.url, '_blank', 'noopener') // mở luôn bài gốc
+    run(t.id, () => api.takeTarget(t.id), 'Đã nhận. Trả lời xong thì dán câu bạn đã comment vào ô bên dưới.')
+  }
+
   return (
-    <section className="card" id="s2">
-      <StepHead no={2} done={done && (shownT.length > 0 || ideas.length > 0)} title="Nhận việc" hint="Bấm “Nhận” trước khi làm để không trùng với bạn khác." />
-      <div className="seg" style={{ marginBottom: 12 }}>
-        <button className={tab === 'comment' ? 'on' : ''} onClick={() => setTab('comment')}>Bài cần trả lời {newT > 0 && <span className="count">{newT}</span>}</button>
-        <button className={tab === 'post' ? 'on' : ''} onClick={() => setTab('post')}>Ý tưởng bài đăng {freeI > 0 && <span className="count">{freeI}</span>}</button>
+    <section className="card zone" id="seeding">
+      <div className="card-h"><h2>Seeding</h2><span className="sub">Chỉ đăng ở Key Aptis miễn phí và Hội review đề Aptis có tâm</span></div>
+      <div className="seg">
+        <button className={tab === 'post' ? 'on' : ''} onClick={() => setTab('post')}>Ý tưởng đăng bài <span className="count">{pool.free.length}</span></button>
+        <button className={tab === 'comment' ? 'on' : ''} onClick={() => setTab('comment')}>Bài cần trả lời {myOpen > 0 && <span className="count">{myOpen}</span>}</button>
       </div>
+
+      {tab === 'post' && (
+        <>
+          <div className="list-count">{who.id === me.id ? 'Bạn' : shortName(who.name)} đã đăng <b>{nPost}/{qPost}</b> bài hôm nay. Câu hỏi và câu trả lời nguyên văn trong Zalo: viết bài từ trang Kỳ Tích, đừng đóng vai người hỏi.</div>
+          {ideaRows.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Kho ý tưởng đang trống. Bot nạp câu hỏi Zalo mỗi sáng khoảng 8h.</div></div>}
+          {ideaRows.length > 0 && (
+            <div className="itable">
+              <div className="irow ihead"><span>Câu hỏi</span><span>Câu trả lời</span><span>Người đăng</span><span></span></div>
+              {ideaRows.map((i) => {
+                const ans = ideaMeta(i)?.ans || ''
+                const post = postOf[i.id]
+                const mineDoing = !post && i.taken_by === who.id
+                return (
+                  <div key={i.id} className={'irow' + (post ? ' got' : i.taken_by ? ' doing' : '')}>
+                    <div className="icell iq" data-l="Câu hỏi"><Clamp text={i.question || i.topic} lines={4} /></div>
+                    <div className="icell ians" data-l="Câu trả lời">{ans ? <Clamp text={ans} lines={4} /> : <span className="sub">—</span>}</div>
+                    <div className="iwho">
+                      {post ? <><span className="iwho-got">✓ {nm(i.taken_by)} đã đăng</span><a className="mini" href={post.url} target="_blank" rel="noreferrer">{post.group_name || 'xem bài'} ↗</a></>
+                        : i.taken_by ? <span className="iwho-doing">● {nm(i.taken_by)} đang đăng</span>
+                        : <span className="sub">Chưa ai lấy</span>}
+                      {mineDoing && !readOnly && <PostLink idea={i} who={who} date={date} groups={groups} onDone={reload} />}
+                    </div>
+                    <div className="iact">
+                      {!i.taken_by && !readOnly && <>
+                        <button className="btn sm" disabled={busy === i.id} onClick={() => run(i.id, () => api.takeIdea(i.id), 'Đăng xong thì dán link vào ô bên dưới câu này.')}>Đăng câu này</button>
+                        <button className="btn sm ghost" disabled={busy === i.id} onClick={() => run(i.id, () => api.skipIdea(i.id))}>Bỏ qua</button>
+                      </>}
+                      {mineDoing && !readOnly && <button className="linkbtn" disabled={busy === i.id} onClick={() => run(i.id, () => api.releaseIdea(i.id))}>Trả lại</button>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
 
       {tab === 'comment' && (
         <>
-          {shownT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot vào group khoảng 3 tiếng một lần (8h, 11h, 14h, 17h, 20h) lấy mọi bài mới để mình vào trả lời. Có bài mới sẽ hiện thông báo ở đầu trang.</div></div>}
-          {shownT.length > 0 && <div className="list-count"><b>{newT}</b> bài chưa ai nhận · {openT.length - newT} đang làm · {doneT.length} đã trả lời hôm nay</div>}
+          <div className="list-count">{who.id === me.id ? 'Bạn' : shortName(who.name)} đã trả lời <b>{nCmt}/{qCmt}</b> bài hôm nay · bot chia bài theo chỉ tiêu (An 5 · Châu 10)</div>
+          {openT.length + doneT.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Chưa có bài nào. Bot vào group khoảng 3 tiếng một lần, có bài mới sẽ báo ở đầu trang.</div></div>}
           <div className="ideas two scroll-list">
-            {shownT.map((t) => {
-              const cls = t.status === 'commented' ? ' mine' : t.taken_by && !mine(t) ? ' taken' : ''
+            {[...openT, ...doneT].map((t) => {
+              const mine = t.taken_by === who.id
+              const forMe = t.assigned_to === who.id
               return (
-                <article key={t.id} className={'idea tcard' + cls}>
-                  <div className="idea-top"><span className="sub">{t.group_name} · {ddmm(t.date)}</span>{t.status === 'new' && t.created_at > seenAt && <span className="chip new">🔔 Vừa tìm</span>}<span className={'chip ' + (t.status === 'commented' ? 'ok' : t.status === 'new' ? '' : 'warn')}>{T_STATUS[t.status]}</span></div>
+                <article key={t.id} className={'idea tcard' + (t.status === 'commented' ? ' mine' : t.taken_by && !mine ? ' taken' : mine ? ' open' : '')}>
+                  <div className="idea-top">
+                    <span className="sub">{t.group_name} · {ddmm(t.date)}</span>
+                    {t.assigned_to && <span className={'chip ' + (forMe ? 'mine' : '')}>{forMe ? (who.id === me.id ? 'Giao cho bạn' : 'Giao cho ' + shortName(who.name)) : 'Giao cho ' + shortName(nameOf[t.assigned_to] || '')}</span>}
+                    {t.status === 'new' && t.created_at > seenAt && <span className="chip new">Mới</span>}
+                    <span className={'chip ' + (t.status === 'commented' ? 'ok' : t.status === 'taken' ? 'warn' : '')}>{t.status === 'taken' ? nm(t.taken_by) + ' đã nhận' : T_STATUS[t.status]}</span>
+                  </div>
                   <div className="tbody" title={t.question}>{t.question}</div>
                   {t.angle && <div className="kv"><b>Gợi ý trả lời:</b> {t.angle}</div>}
-                  {t.assigned_to && <div className="kv"><b>Giao cho:</b> {t.assigned_to === who.id ? 'bạn' : nameOf[t.assigned_to] || '—'}</div>}
-                  <a href={t.url} target="_blank" rel="noreferrer" className="kv topen">Mở bài gốc ↗</a>
-                  <div className="foot">
-                    {(t.status === 'new' || (t.status === 'taken' && mine(t))) && (
-                      <label className={'tick' + (busy === t.id ? ' busy' : '')}>
-                        <input type="checkbox" disabled={busy === t.id} onChange={() => run(t.id, () => api.completeTarget(t.id, t.url), 'Đã ghi. Cảm ơn bạn!')} />
-                        Đã trả lời bài này
-                      </label>
-                    )}
-                    {t.status === 'new' && <>
-                      <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.takeTarget(t.id), 'Đã nhận')}>Nhận bài</button>
-                      <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'), 'Đã chuyển vào mục Đã bỏ qua')}>Bỏ qua</button>
-                    </>}
-                    {t.status === 'taken' && mine(t) && <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'new'))}>Trả lại</button>}
-                    {t.status === 'taken' && !mine(t) && <span className="sub">{nameOf[t.taken_by] || 'Người khác'} đã nhận</span>}
-                    {t.status === 'commented' && <span className="ok">✓ {t.taken_by === me.id ? 'Bạn' : nameOf[t.taken_by]} đã trả lời bài này</span>}
-                  </div>
+                  {t.status === 'taken' && mine && <a href={t.url} target="_blank" rel="noreferrer" className="kv topen">{t.url.replace(/^https?:\/\/(www\.)?/, '')} ↗</a>}
+                  {t.status === 'commented' && (
+                    <div className="said">✓ {nm(t.taken_by)} đã trả lời{t.comment_text && <>: <b>“{t.comment_text}”</b></>} · bot kiểm tra sáng mai</div>
+                  )}
+                  {!readOnly && (
+                    <div className="foot">
+                      {t.status === 'new' && <>
+                        <button className={'btn sm' + (forMe || !t.assigned_to ? '' : ' ghost')} disabled={busy === t.id} onClick={() => take(t)}>{forMe || !t.assigned_to ? 'Nhận bài' : 'Nhận thay ' + shortName(nameOf[t.assigned_to] || '')}</button>
+                        {(forMe || !t.assigned_to || me.role === 'admin') && <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'skipped'), 'Đã bỏ qua')}>Bỏ qua</button>}
+                      </>}
+                      {t.status === 'taken' && mine && <AnswerBox t={t} onDone={reload} />}
+                      {t.status === 'taken' && !mine && <span className="sub">{nm(t.taken_by)} đang làm</span>}
+                    </div>
+                  )}
                 </article>
               )
             })}
@@ -366,48 +342,11 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
               <summary>Đã bỏ qua ({skippedT.length}) · xem lại</summary>
               {skippedT.map((t) => (
                 <div key={t.id} className="skip-row">
-                  <div className="skip-txt">
-                    <div>{t.question}</div>
-                    <span className="sub">{t.group_name} · {ddmm(t.date)} · <a href={t.url} target="_blank" rel="noreferrer">Mở bài gốc ↗</a></span>
-                  </div>
-                  <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, async () => { await api.setTargetStatus(t.id, 'new') }, 'Đã đưa lại vào danh sách')}>Đưa lại vào danh sách</button>
+                  <div className="skip-txt"><div>{t.question}</div><span className="sub">{t.group_name} · {ddmm(t.date)}</span></div>
+                  {!readOnly && <button className="btn sm ghost" disabled={busy === t.id} onClick={() => run(t.id, () => api.setTargetStatus(t.id, 'new'), 'Đã đưa lại vào danh sách')}>Đưa lại vào danh sách</button>}
                 </div>
               ))}
             </details>
-          )}
-        </>
-      )}
-
-      {tab === 'post' && (
-        <>
-          {ideas.length === 0 && <div className="all-done"><Mascot who="kyky" pose="idea" className="" /><div className="sub">Chưa có ý tưởng bài đăng. Khoảng 8h–8h30 sáng bot lấy câu học viên hỏi trong Zalo, ai nhận rồi thì bot bù cho đủ 30.</div></div>}
-          {ideas.length > 0 && <p className="mini ask-tip">Câu hỏi và câu trả lời <b>nguyên văn</b> trong Zalo. Viết bài từ nick/trang Kỳ Tích, không đăng lại như thể mình là người hỏi.</p>}
-          {ideas.length > 0 && (
-            <div className="itable">
-              <div className="irow ihead"><span>Câu hỏi</span><span>Câu trả lời</span><span>Giao cho ai</span><span></span></div>
-              {[...ideas].sort((a, b) => !!a.taken_by - !!b.taken_by).map((i) => {
-                const m = ideaMeta(i)
-                const ans = m?.ans || ''
-                return (
-                  <div key={i.id} className={'irow' + (i.taken_by ? ' got' : '') + (mine(i) ? ' me' : '')}>
-                    <div className="icell iq" data-l="Câu hỏi"><Clamp text={i.question || i.topic} lines={4} /></div>
-                    <div className="icell ians" data-l="Câu trả lời">{ans ? <Clamp text={ans} lines={4} /> : <span className="sub">—</span>}</div>
-                    <div className="iwho">
-                      {i.taken_by ? <span className="iwho-got">✓ {i.taken_by === who.id ? 'Bạn' : nameOf[i.taken_by] || 'Người khác'}</span>
-                        : i.assigned_to ? <span className="sub">{i.assigned_to === who.id ? 'Bạn' : nameOf[i.assigned_to]} (chưa nhận)</span>
-                        : <span className="sub">Chưa ai nhận</span>}
-                    </div>
-                    <div className="iact">
-                      {!i.taken_by && <button className="btn sm" disabled={busy === i.id} onClick={() => run(i.id, () => api.takeIdea(i.id), 'Đã nhận')}>Nhận</button>}
-                      {mine(i) && <>
-                        <button className="btn sm" onClick={() => onWrite(i)}>Ghi link</button>
-                        <button className="btn sm ghost" disabled={busy === i.id} onClick={() => run(i.id, () => api.releaseIdea(i.id))}>Trả lại</button>
-                      </>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
           )}
         </>
       )}
@@ -415,8 +354,62 @@ function PickWork({ tab, setTab, seenAt, who, me, targets, ideas, nameOf, date, 
   )
 }
 
+// Dán link bài đã đăng ngay dưới câu ý tưởng (chỉ nhận 2 group được phép)
+function PostLink({ idea, who, date, groups, onDone }) {
+  const notify = useToast()
+  const allowed = groups.filter((g) => POST_GROUPS.includes(g.name))
+  const [url, setUrl] = useState('')
+  const [gid, setGid] = useState('')
+  const [busy, setBusy] = useState(false)
+  const det = /^https?:\/\//i.test(url.trim()) ? detectLink(url.trim(), groups) : null
+  async function save(e) {
+    e.preventDefault()
+    const u = url.trim()
+    if (!/^https?:\/\/\S+$/i.test(u)) return notify('Link chưa đúng. Dán link bắt đầu bằng https://', true)
+    const g = det?.group || allowed.find((x) => x.id === gid)
+    if (det?.group && !POST_GROUPS.includes(det.group.name)) return notify('Chỉ đăng ở Key Aptis miễn phí hoặc Hội review đề Aptis có tâm.', true)
+    if (!g) return notify('Chọn group bạn đã đăng.', true)
+    setBusy(true)
+    try { await api.addPost({ date, member_id: who.id, url: u, group_id: g.id, group_name: g.name, kind: 'post', idea_id: idea.id }); notify('Đã ghi. Cảm ơn bạn!'); onDone() }
+    catch (x) { notify(x.message, true); setBusy(false) }
+  }
+  return (
+    <form className="pastebox" onSubmit={save}>
+      <input className="input" placeholder="Dán link bài đã đăng" value={url} onChange={(e) => setUrl(e.target.value)} />
+      {det && !det.group && (
+        <select className="input" value={gid} onChange={(e) => setGid(e.target.value)}>
+          <option value="">Đăng ở group nào?</option>
+          {allowed.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+      )}
+      <button className="btn sm" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>
+    </form>
+  )
+}
+
+// Trả lời xong: dán câu đã comment để bot kiểm tra
+function AnswerBox({ t, onDone }) {
+  const notify = useToast()
+  const [v, setV] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function save(e) {
+    e.preventDefault()
+    if (v.trim().length < 5) return notify('Dán câu bạn đã comment vào bài này.', true)
+    setBusy(true)
+    try { await api.answerTarget(t.id, v.trim()); notify('Đã ghi. Cảm ơn bạn!'); onDone() }
+    catch (x) { notify(x.message, true); setBusy(false) }
+  }
+  return (
+    <form className="cmtbox" onSubmit={save}>
+      <textarea className="input" placeholder="Dán câu bạn đã comment vào bài này" value={v} onChange={(e) => setV(e.target.value)} />
+      <button className="btn sm" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>
+      <button type="button" className="linkbtn" onClick={() => api.setTargetStatus(t.id, 'new').then(onDone)}>Trả lại</button>
+    </form>
+  )
+}
+
 // ---- Bước 3a: việc cố định + phát sinh ----
-function Tasks({ routines, day, setDay, checkOf, toggle, date, who, reload, doneR, totalR }) {
+function Tasks({ routines, day, setDay, checkOf, toggle, date, who, reload, doneR, totalR, readOnly }) {
   const notify = useToast()
   const [title, setTitle] = useState('')
   async function add(e) {
@@ -460,10 +453,12 @@ function Tasks({ routines, day, setDay, checkOf, toggle, date, who, reload, done
           <button className="x" aria-label="Xoá" onClick={() => removeExtra(t)}>×</button>
         </div>
       ))}
-      <form className="row" onSubmit={add} style={{ marginTop: 10 }}>
-        <input className="input" placeholder="+ Thêm việc phát sinh" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <button className="btn soft">Thêm</button>
-      </form>
+      {!readOnly && (
+        <form className="row" onSubmit={add} style={{ marginTop: 10 }}>
+          <input className="input" placeholder="+ Thêm việc phát sinh" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <button className="btn soft">Thêm</button>
+        </form>
+      )}
     </section>
   )
 }
@@ -478,7 +473,7 @@ function NoteInput({ value, onSave }) {
 }
 
 // ---- Bước 3b: seeding đã ghi hôm nay ----
-function SeedLog({ day, setDay, nPost, nCmt, qPost, qCmt, onAdd }) {
+function SeedLog({ day, setDay, nPost, nCmt, qPost, qCmt, onAdd, readOnly }) {
   const notify = useToast()
   async function remove(p) {
     if (!confirm('Xoá dòng seeding này?')) return
@@ -494,7 +489,7 @@ function SeedLog({ day, setDay, nPost, nCmt, qPost, qCmt, onAdd }) {
   )
   return (
     <section className="card" id="s-log">
-      <StepHead no={3} done={nPost >= qPost && nCmt >= qCmt} title="Bài đã làm" right={`${day.posts.length} link`} hint="Đăng hoặc trả lời xong thì dán link vào đây." />
+      <StepHead no={3} done={nPost >= qPost && nCmt >= qCmt} title="Bài đã làm hôm nay" right={`${day.posts.length} link`} hint="Mọi link bài đăng và bài trả lời trong ngày." />
       <Bar label="Bài đăng" n={nPost} q={qPost} />
       <Bar label="Bài trả lời" n={nCmt} q={qCmt} />
       <div className="rule">🚫 <b>Không đóng vai học viên.</b> Không chép nguyên tin nhắn Zalo của khách. Không dán link trơ trọi hay văn mẫu lặp lại. Đăng từ nick/trang Kỳ Tích hoặc trả lời câu hỏi thật.</div>
@@ -507,39 +502,10 @@ function SeedLog({ day, setDay, nPost, nCmt, qPost, qCmt, onAdd }) {
             <div className="meta"><span className={'chip' + (p.kind === 'comment' ? ' c' : '')}>{KIND_SHORT[p.kind]}</span>{p.group_name}{p.created_at && <span>· {timeVN(p.created_at)}</span>}</div>
             {p.question && <div className="meta">Bài gốc: {p.question}</div>}
           </div>
-          <button className="x" aria-label="Xoá" onClick={() => remove(p)}>×</button>
+          {!readOnly && <button className="x" aria-label="Xoá" onClick={() => remove(p)}>×</button>}
         </div>
       ))}
-      <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onAdd}>+ Thêm link</button>
-    </section>
-  )
-}
-
-// ---- Bước 4: chốt ngày ----
-function DayNote({ date, who, note, setDay, ready }) {
-  const notify = useToast()
-  const [v, setV] = useState(note?.note || '')
-  const [editing, setEditing] = useState(!note)
-  useEffect(() => { setV(note?.note || ''); setEditing(!note) }, [note, who.id])
-  async function save(e) {
-    e.preventDefault()
-    if (!v.trim()) return notify('Ghi 1 câu tổng kết ngày nhé', true)
-    try {
-      const row = await api.saveDayNote({ date, member_id: who.id, note: v.trim() })
-      setDay((x) => ({ ...x, note: row })); setEditing(false); notify('Đã chốt ngày. Cảm ơn bạn!')
-    } catch (x) { notify(x.message, true) }
-  }
-  return (
-    <section className="card" id="s4">
-      <StepHead no={4} done={!!note} title="Chốt ngày" hint={ready ? 'Đủ chỉ tiêu rồi, ghi 1 câu rồi nghỉ thôi!' : 'Cuối ngày ghi 1 câu: làm được gì, vướng gì. Thiện đọc ở Tổng quan.'} />
-      {!editing ? (
-        <div className="row"><Mascot who="kyky" pose="heart_wink" className="" /><div style={{ flex: 1 }}>{note.note}</div><button className="btn sm ghost" onClick={() => setEditing(true)}>Sửa</button></div>
-      ) : (
-        <form onSubmit={save}>
-          <textarea className="input" placeholder="vd: Xong 5 comment, bài Speaking được nhiều bạn hỏi lại. Group B1B2 duyệt bài chậm." value={v} onChange={(e) => setV(e.target.value)} />
-          <button className="btn block" style={{ marginTop: 10 }}>Chốt ngày</button>
-        </form>
-      )}
+      {!readOnly && <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onAdd}>+ Thêm link khác</button>}
     </section>
   )
 }

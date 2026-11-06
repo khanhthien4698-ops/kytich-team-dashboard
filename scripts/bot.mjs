@@ -11,7 +11,7 @@
 //   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
 //   node scripts/bot.mjs kho-build                    # gom hỏi đáp Zalo nguyên văn vào kho trên máy (JSON + CSV)
-//   node scripts/bot.mjs kho-fill [--n 30]            # bù thẻ Gợi ý bài đăng hôm nay cho đủ N thẻ chưa ai nhận
+//   node scripts/bot.mjs kho-fill [--min 60]          # nạp hết kho hỏi đáp lên dashboard (kho ý tưởng chung, web hiện 30 câu)
 //   node scripts/bot.mjs target-text --file texts.json  # sửa nội dung bài đã có: [{ "url", "question" }]
 //   node scripts/bot.mjs groups                          # danh sách group Facebook đang dùng (JSON)
 //   node scripts/bot.mjs run-start morning|evening|scan  # in DONE / BUSY / GO (GO = giữ khóa, bắt đầu làm)
@@ -220,10 +220,13 @@ async function main() {
     const ideaIds = [...new Set(posts.map((p) => p.idea_id).filter(Boolean))]
     const ideas = ideaIds.length ? await q(sb.from('seed_ideas').select('id,topic').in('id', ideaIds)) : []
     const nameOf = Object.fromEntries(members.map((m) => [m.id, m.name]))
+    // Bài trả lời: kèm câu nhân viên đã comment để bot tìm đúng comment trên bài gốc
+    const tIds = [...new Set(posts.map((p) => p.target_id).filter(Boolean))]
+    const said = tIds.length ? Object.fromEntries((await q(sb.from('seed_targets').select('id,comment_text').in('id', tIds))).map((t) => [t.id, t.comment_text])) : {}
     const out = posts.filter((p) => a.all || !doneSet.has(p.id)).map((p) => ({
       post_id: p.id, member: nameOf[p.member_id], date: p.date, posted_at: p.created_at, url: p.url,
       group: p.group_name, kind: p.kind, question: p.question || null, idea_topic: ideas.find((i) => i.id === p.idea_id)?.topic || null,
-      already_reviewed: doneSet.has(p.id),
+      already_reviewed: doneSet.has(p.id), comment_text: p.target_id ? said[p.target_id] || null : null,
     }))
     console.log(JSON.stringify({ date: day, total_posts: posts.length, to_review: out.length, posts: out }, null, 2))
   } else if (cmd === 'reviews') {
@@ -267,33 +270,44 @@ async function main() {
     if (!a.file) die('Cần --file targets.json')
     const items = JSON.parse(readFileSync(a.file, 'utf8'))
     const groups = await q(sb.from('seed_groups').select('id,name'))
+    // Chia bài theo chỉ tiêu trả lời (comment_quota): An 5 · Châu 10 → cứ 3 bài thì 1 An, 2 Châu (Thiện chốt 06/11)
+    const staff = members.filter((m) => m.active && m.role === 'staff' && (m.comment_quota ?? 0) > 0)
+    const given = Object.fromEntries(staff.map((m) => [m.id, 0]))
+    for (const t of await q(sb.from('seed_targets').select('assigned_to').eq('date', vnToday()))) if (t.assigned_to in given) given[t.assigned_to]++
+    const nextStaff = () => {
+      if (!staff.length) return null
+      const m = staff.reduce((b, x) => (given[x.id] / x.comment_quota < given[b.id] / b.comment_quota ? x : b))
+      given[m.id]++
+      return m.id
+    }
     const rows = items.map((t) => {
       if (!/^https?:\/\//i.test(t.url || '')) die('Mỗi cơ hội cần "url" bắt đầu bằng https://')
       if (!t.question) die('Mỗi cơ hội cần "question" (nội dung bài nguyên văn, đã che thông tin cá nhân)')
       const g = groups.find((x) => x.name.toLowerCase() === String(t.group || '').toLowerCase())
-      return { date: t.date || vnToday(), url: t.url, group_id: g?.id ?? null, group_name: g?.name ?? t.group ?? null, question: t.question, angle: t.angle || null, assigned_to: byName(t.assigned_to) }
+      return { date: t.date || vnToday(), url: t.url, group_id: g?.id ?? null, group_name: g?.name ?? t.group ?? null, question: t.question, angle: t.angle || null, assigned_to: t.assigned_to ? byName(t.assigned_to) : nextStaff() }
     })
     // Bài đã có (trùng url) thì giữ nguyên, không reset trạng thái người đã nhận
     const added = await q(sb.from('seed_targets').upsert(rows, { onConflict: 'url', ignoreDuplicates: true }).select('id'))
     console.log(`OK: thêm ${added.length} cơ hội mới (${rows.length - added.length} bài đã có, bỏ qua).`)
   } else if (cmd === 'kho-fill') {
-    // Luôn để đủ N thẻ "chưa ai nhận" trong Gợi ý bài đăng hôm nay, bù từ kho hỏi đáp
-    const N = Number(a.n) || 30
+    // Kho ý tưởng chung (Thiện chốt 06/11): nạp HẾT câu trong kho hỏi đáp chưa có trên dashboard; web luôn hiện 30 câu
+    // chưa ai lấy và chưa bị bỏ qua. Còn ít hơn --min (mặc định 60) câu trống thì nạp lại câu cũ dùng lâu nhất.
+    const MIN = Number(a.min) || 60
     const today = vnToday()
     if (!existsSync(KHO_FILE)) die('Chưa có kho, chạy kho-build trước')
     const kho = JSON.parse(readFileSync(KHO_FILE, 'utf8'))
-    const free = await q(sb.from('seed_ideas').select('id', { count: 'exact' }).eq('date', today).is('taken_by', null))
-    const need = N - free.length
-    if (need <= 0) return console.log(`OK: hôm nay đã đủ ${free.length} thẻ chưa ai nhận, không thêm.`)
-    const past = await q(sb.from('seed_ideas').select('question,date').gte('date', addDays(today, -365)))
+    const all = await q(sb.from('seed_ideas').select('question,date,taken_by,skipped_at'))
     const usedOn = new Map()
-    past.forEach((p) => { const k = normQ(p.question || ''); if (!usedOn.has(k) || usedOn.get(k) < p.date) usedOn.set(k, p.date) })
-    const picks = pickFromKho(kho, need, usedOn)
-    if (!picks.length) return console.log('Kho trống, không có câu để thêm.')
+    all.forEach((p) => { const k = normQ(p.question || ''); if (!usedOn.has(k) || usedOn.get(k) < p.date) usedOn.set(k, p.date) })
+    const freeNow = all.filter((p) => !p.taken_by && !p.skipped_at).length
+    const fresh = pickFromKho(kho, kho.length, usedOn).filter((k) => !usedOn.has(normQ(k.q)))
+    let picks = fresh
+    if (freeNow + fresh.length < MIN) picks = picks.concat(pickFromKho(kho, MIN - freeNow - fresh.length, usedOn).filter((k) => usedOn.has(normQ(k.q))))
+    if (!picks.length) return console.log(`OK: kho đã nạp hết, đang có ${freeNow} câu trống.`)
     const ddmmhh = (at) => `${at.slice(8, 10)}/${at.slice(5, 7)} ${at.slice(11, 16)}`
     const rows = picks.map((k) => ({ date: today, topic: k.topic, question: k.q, angle: 'meta:' + JSON.stringify({ src: 'zalo', at: ddmmhh(k.at), n: k.times, ans: k.a }), gift_doc: null, assigned_to: null }))
-    await q(sb.from('seed_ideas').insert(rows))
-    console.log(`OK: thêm ${rows.length} thẻ từ kho (${picks.filter((k) => !usedOn.has(normQ(k.q))).length} câu mới chưa dùng), giờ có ${free.length + rows.length} thẻ chưa ai nhận.`)
+    for (let i = 0; i < rows.length; i += 200) await q(sb.from('seed_ideas').insert(rows.slice(i, i + 200)))
+    console.log(`OK: nạp ${rows.length} câu (${fresh.length} câu mới), kho trên dashboard giờ có ${freeNow + rows.length} câu trống.`)
   } else if (cmd === 'target-text') {
     // Sửa nội dung bài (cột question) của cơ hội đã có theo url; không đụng trạng thái/người nhận
     if (!a.file) die('Cần --file texts.json')

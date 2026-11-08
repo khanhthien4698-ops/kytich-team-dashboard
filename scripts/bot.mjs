@@ -22,6 +22,7 @@
 //   node scripts/bot.mjs bv-get [tasks|ideas|focus|reports|days|meta] [--id ID]  # Bàn việc của Thiện: in JSON [{col,id,data}]
 //   node scripts/bot.mjs bv-put --file x.json [--merge]  # ghi Bàn việc: [{col,id,data}] (hoặc file xuất {tasks:[{id,data}],...}); --merge = chỉ đè các trường gửi lên
 //   node scripts/bot.mjs bv-del --col tasks --id ID [--id ID2]  # xoá hẳn bản ghi Bàn việc (luật dọn việc xong quá 14 ngày)
+//   node scripts/bot.mjs chia-lai [--apply]  # chia lại bài cần trả lời chưa ai nhận theo tỉ lệ ở tab Cài đặt (ô cmt/ngày); không --apply = chỉ xem
 //   node scripts/bot.mjs tien-do [--chot]  # in tin tiến độ seeding hôm nay của từng người (cho Telegram 10h/16h/21h); --chot thêm dòng chốt ngày
 //   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
@@ -134,7 +135,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 31).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 32).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -143,6 +144,21 @@ async function main() {
 
   const q = async (p) => { const { data, error } = await p; if (error) die(error.message); return data }
   const members = await q(sb.from('members').select('*').order('sort_order'))
+  const SEED_GROUPS = ['Key Aptis miễn phí - update liên tục', 'Hội review đề Aptis có tâm'], SEED_FROM = '2026-11-05'
+  // Người nhận bài cần trả lời: nhân viên đang làm, có tỉ lệ > 0, không tính tài khoản mẫu "Thành viên N".
+  // load = số bài đang mở của từng người: bài mới đang giao cho họ + bài họ đã nhận nhưng chưa xong
+  const openLoad = async () => {
+    const staff = members.filter((m) => m.active && m.role === 'staff' && (m.comment_quota ?? 0) > 0 && !/^Thành viên \d/.test(m.name))
+    const load = Object.fromEntries(staff.map((m) => [m.id, 0]))
+    // Chỉ tính bài hiện ở mục "Bài cần trả lời" trên dashboard: 2 group seeding, từ 05/11 (giống Today.jsx)
+    const open = (await q(sb.from('seed_targets').select('id,date,group_name,status,assigned_to,taken_by').in('status', ['new', 'taken'])))
+      .filter((t) => SEED_GROUPS.includes(t.group_name) && t.date >= SEED_FROM)
+    for (const t of open) {
+      const who = t.status === 'taken' ? t.taken_by : t.assigned_to
+      if (who in load) load[who]++
+    }
+    return { staff, load, open }
+  }
   const me = members.find((m) => m.login_email === BOT_EMAIL)
   if (!me || me.role !== 'bot' || !me.active) die(`${BOT_EMAIL} chưa có trong bảng members với role 'bot'.`)
   const byName = (name) => {
@@ -280,14 +296,14 @@ async function main() {
     if (!a.file) die('Cần --file targets.json')
     const items = JSON.parse(readFileSync(a.file, 'utf8'))
     const groups = await q(sb.from('seed_groups').select('id,name'))
-    // Chia bài theo chỉ tiêu trả lời (comment_quota): An 5 · Châu 10 → cứ 3 bài thì 1 An, 2 Châu (Thiện chốt 06/11)
-    const staff = members.filter((m) => m.active && m.role === 'staff' && (m.comment_quota ?? 0) > 0)
-    const given = Object.fromEntries(staff.map((m) => [m.id, 0]))
-    for (const t of await q(sb.from('seed_targets').select('assigned_to').eq('date', vnToday()))) if (t.assigned_to in given) given[t.assigned_to]++
+    // Chia bài theo tỉ lệ cài ở tab Cài đặt (ô "cmt/ngày" = comment_quota): An 10 · Châu 10 → 50/50 (Thiện chốt 08/11).
+    // Cân theo số bài ĐANG MỞ của từng người (chưa ai bấm Đã seeding/Bỏ qua), không chỉ bài hôm nay,
+    // nên ai đang ôm ít thì được giao trước. Áp cho mọi group (Key Aptis miễn phí, Hội review đề...).
+    const { staff, load } = await openLoad()
     const nextStaff = () => {
       if (!staff.length) return null
-      const m = staff.reduce((b, x) => (given[x.id] / x.comment_quota < given[b.id] / b.comment_quota ? x : b))
-      given[m.id]++
+      const m = staff.reduce((b, x) => (load[x.id] / x.comment_quota < load[b.id] / b.comment_quota ? x : b))
+      load[m.id]++
       return m.id
     }
     const rows = items.map((t) => {
@@ -318,11 +334,43 @@ async function main() {
     const rows = picks.map((k) => ({ date: today, topic: k.topic, question: k.q, angle: 'meta:' + JSON.stringify({ src: 'zalo', at: ddmmhh(k.at), n: k.times, ans: k.a }), gift_doc: null, assigned_to: null }))
     for (let i = 0; i < rows.length; i += 200) await q(sb.from('seed_ideas').insert(rows.slice(i, i + 200)))
     console.log(`OK: nạp ${rows.length} câu (${fresh.length} câu mới), kho trên dashboard giờ có ${freeNow + rows.length} câu trống.`)
+  } else if (cmd === 'chia-lai') {
+    // Chia lại bài cần trả lời CHƯA AI NHẬN (status new) cho đều theo tỉ lệ ở tab Cài đặt. Bài đã nhận/đã seeding/bỏ qua giữ nguyên.
+    // Mặc định chỉ in kế hoạch; thêm --apply mới ghi (đổi dữ liệu: cần Thiện duyệt).
+    const { staff, open } = await openLoad()
+    if (!staff.length) die('Không có nhân viên nào có tỉ lệ > 0')
+    const name = (id) => members.find((m) => m.id === id)?.name || (id ? 'người khác' : 'chưa giao')
+    const count = (rows, key) => { const c = {}; for (const t of rows) c[name(t[key])] = (c[name(t[key])] || 0) + 1; return Object.entries(c).map(([k, v]) => k + ' ' + v).join(', ') || '0' }
+    const plan = [], after = Object.fromEntries(staff.map((m) => [m.id, 0]))
+    console.log('Tỉ lệ (ô cmt/ngày ở Cài đặt): ' + staff.map((m) => `${m.name} ${m.comment_quota}`).join(' · '))
+    // Chia riêng từng group để cả Key Aptis miễn phí lẫn Hội review đề đều đúng tỉ lệ
+    for (const g of SEED_GROUPS) {
+      const rows = open.filter((t) => t.group_name === g)
+      const load = Object.fromEntries(staff.map((m) => [m.id, 0]))
+      for (const t of rows) if (t.status === 'taken' && t.taken_by in load) load[t.taken_by]++
+      const free = rows.filter((t) => t.status === 'new').sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.id < y.id ? -1 : 1))
+      const before = count(free, 'assigned_to')
+      for (const t of free) {
+        const m = staff.reduce((b, x) => (load[x.id] / x.comment_quota < load[b.id] / b.comment_quota ? x : b))
+        load[m.id]++
+        if (t.assigned_to !== m.id) plan.push({ id: t.id, to: m.id })
+      }
+      for (const m of staff) after[m.id] += load[m.id]
+      console.log(`${g}: ${rows.length} bài mở, ${rows.length - free.length} đã có người nhận. Chưa nhận trước: ${before} → sau: ${staff.map((m) => m.name + ' ' + load[m.id]).join(', ')}`)
+    }
+    console.log('Tổng sau khi chia: ' + staff.map((m) => `${m.name} ${after[m.id]}`).join(' · '))
+    console.log(`Cần đổi người: ${plan.length} bài`)
+    if (!a.apply) { console.log('Chưa ghi. Thêm --apply để ghi.'); process.exit(0) }
+    for (const m of staff) {
+      const ids = plan.filter((p) => p.to === m.id).map((p) => p.id)
+      for (let i = 0; i < ids.length; i += 200) await q(sb.from('seed_targets').update({ assigned_to: m.id }).in('id', ids.slice(i, i + 200)).eq('status', 'new').select('id'))
+    }
+    console.log(`OK: đã chia lại ${plan.length} bài.`)
   } else if (cmd === 'tien-do') {
     // Số liệu giống trang Cả đội: bài seeding hôm nay / seeding_quota; bài cần trả lời = bài ở 2 group seeding,
     // từ 05/11, còn mở và đang giao cho người đó (bài trả lời không có chỉ tiêu, phải trả lời hết)
     const today = vnToday()
-    const GROUPS = ['Key Aptis miễn phí - update liên tục', 'Hội review đề Aptis có tâm'], FROM = '2026-11-05'
+    const GROUPS = SEED_GROUPS, FROM = SEED_FROM
     const staff = members.filter((m) => m.role === 'staff' && m.active && !/^Thành viên \d/.test(m.name))
     const posts = await q(sb.from('seeding_posts').select('member_id,kind').eq('date', today))
     const open = (await q(sb.from('seed_targets').select('group_name,date,status,assigned_to,taken_by').in('status', ['new', 'taken'])))

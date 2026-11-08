@@ -22,7 +22,7 @@
 //   node scripts/bot.mjs bv-get [tasks|ideas|focus|reports|days|meta] [--id ID]  # Bàn việc của Thiện: in JSON [{col,id,data}]
 //   node scripts/bot.mjs bv-put --file x.json [--merge]  # ghi Bàn việc: [{col,id,data}] (hoặc file xuất {tasks:[{id,data}],...}); --merge = chỉ đè các trường gửi lên
 //   node scripts/bot.mjs bv-del --col tasks --id ID [--id ID2]  # xoá hẳn bản ghi Bàn việc (luật dọn việc xong quá 14 ngày)
-//   node scripts/bot.mjs chia-lai [--apply]  # chia lại bài cần trả lời chưa ai nhận theo tỉ lệ ở tab Cài đặt (ô cmt/ngày); không --apply = chỉ xem
+//   node scripts/bot.mjs chia-lai [--apply] [--deu]  # chia lại bài cần trả lời chưa ai nhận theo tỉ lệ ở tab Cài đặt (ô cmt/ngày); không --apply = chỉ xem
 //   node scripts/bot.mjs tien-do [--chot]  # in tin tiến độ seeding hôm nay của từng người (cho Telegram 10h/16h/21h); --chot thêm dòng chốt ngày
 //   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
@@ -337,7 +337,9 @@ async function main() {
   } else if (cmd === 'chia-lai') {
     // Chia lại bài cần trả lời CHƯA AI NHẬN (status new) cho đều theo tỉ lệ ở tab Cài đặt. Bài đã nhận/đã seeding/bỏ qua giữ nguyên.
     // Mặc định chỉ in kế hoạch; thêm --apply mới ghi (đổi dữ liệu: cần Thiện duyệt).
-    const { staff, open } = await openLoad()
+    // --deu: chia đều mọi người, bỏ qua tỉ lệ ở Cài đặt (dùng khi Thiện bảo chia đều ngay mà ô cmt/ngày chưa sửa)
+    const { staff: st0, open } = await openLoad()
+    const staff = a.deu ? st0.map((m) => ({ ...m, comment_quota: 1 })) : st0
     if (!staff.length) die('Không có nhân viên nào có tỉ lệ > 0')
     const name = (id) => members.find((m) => m.id === id)?.name || (id ? 'người khác' : 'chưa giao')
     const count = (rows, key) => { const c = {}; for (const t of rows) c[name(t[key])] = (c[name(t[key])] || 0) + 1; return Object.entries(c).map(([k, v]) => k + ' ' + v).join(', ') || '0' }

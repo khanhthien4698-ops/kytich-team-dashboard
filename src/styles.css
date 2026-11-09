@@ -515,6 +515,8 @@ h3 { font-size: 14px; font-weight: 600; }
 .ideas.two { grid-template-columns: 1fr !important; gap: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .idea { border: 0; border-top: 1px solid var(--line-2); border-radius: 0; padding: 16px 18px; gap: 6px; }
 .ideas .idea:first-child { border-top: 0; }
+/* Khung Bài cần trả lời phải cuộn được: .ideas.two có overflow hidden và mạnh hơn .scroll-list, nên bài thứ 4 trở đi bị cắt mất */
+.ideas.two.scroll-list { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .idea:hover { background: var(--tint); border-color: var(--line-2); }
 .idea.mine { background: linear-gradient(90deg, var(--green-soft), var(--card) 60%); border-color: var(--line-2); }
 .idea.taken { opacity: .6; }

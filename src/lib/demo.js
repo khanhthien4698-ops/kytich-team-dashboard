@@ -44,6 +44,8 @@ function seed() {
     ['Lịch thi', 'Cho em hỏi thi aptis ở HN tháng 11 đăng kí ở đâu, bao lâu có điểm ạ', 'zalo', '29/10 19:05', 2, 'Ở HN em đăng ký qua Hội đồng Anh hoặc các điểm thi liên kết nhé. Thường 2–5 ngày làm việc là có điểm.'],
     ['Listening', 'sao e nghe đc keyword mà vẫn chọn sai hoài vậy ad', 'zalo', '30/10 07:52', 1, 'Vì đề hay gài từ phủ định với đổi ý ở cuối câu đó em. Nghe hết câu rồi mới chọn, đừng chọn ngay khi nghe thấy keyword.'],
     ['Writing', 'writing part 4 email trang trọng mở đầu sao cho đúng ạ, e hay viết dear friend', 'zalo', '30/10 06:31', 1, 'Email trang trọng thì mở bằng Dear Sir/Madam hoặc Dear Mr/Ms + họ nhé em, Dear friend chỉ dùng cho email thân mật thôi.'],
+    // Câu hỏi dài, trả lời ngắn: để thử nút Xem hết trên điện thoại (câu hỏi bị cắt mà trả lời không)
+    ['Key/đề', 'Ad ơi cho e hỏi phần ôn đề Writing part 4 e thấy có nhiều đề quá mà e chỉ còn 1 tuần nữa là thi, e tính chỉ ôn mấy đề có nhãn ưu tiên thôi được không ạ hay phải ôn hết tất cả các đề trong mục đó thì mới chắc ạ', 'zalo', '30/10 08:10', 1, 'Ôn đề có nhãn ưu tiên trước nha b'],
   ]
   // Kho ý tưởng chung: ~40 câu (lặp lại mẫu), 2 câu đang có người đăng
   const seed_ideas = Array.from({ length: 40 }, (_, i) => {

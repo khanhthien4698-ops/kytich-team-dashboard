@@ -247,7 +247,17 @@ function useCut(ref, deps) {
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    const check = () => setCut(el.scrollHeight > el.clientHeight + 1)
+    // Đo cả 2 cách: scrollHeight (Chrome) và chiều cao thật khi mở hết so với lúc cắt (Safari iPhone
+    // có lúc báo scrollHeight = clientHeight dù chữ đã bị cắt "…")
+    const check = () => {
+      if (el.classList.contains('open')) return
+      const shown = el.getBoundingClientRect().height
+      const st = el.style, keep = [st.webkitLineClamp, st.display, st.overflow, st.maxHeight]
+      st.webkitLineClamp = 'unset'; st.display = 'block'; st.overflow = 'visible'; st.maxHeight = 'none'
+      const full = el.getBoundingClientRect().height
+      ;[st.webkitLineClamp, st.display, st.overflow, st.maxHeight] = keep
+      setCut(el.scrollHeight > el.clientHeight + 1 || full > shown + 2)
+    }
     check()
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(check) : null
     ro?.observe(el)

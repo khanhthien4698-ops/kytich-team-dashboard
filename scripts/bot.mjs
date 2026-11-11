@@ -7,7 +7,7 @@
 //   node scripts/bot.mjs report --text "..." [--member "Thành viên 1"] [--date YYYY-MM-DD]
 //   node scripts/bot.mjs report --file report.json   # [{ "member": null|"Tên", "text": "..." }, ...]
 //   node scripts/bot.mjs ideas --file ideas.json     # [{ "topic","question","answer","source":"zalo|web","asked_at","times" }, ...] hỏi + đáp nguyên văn; thêm --replace để thay thẻ chưa ai nhận
-//   node scripts/bot.mjs to-review [YYYY-MM-DD] [--kind post|comment] [--all]  # bài/comment hôm qua chưa chấm
+//   node scripts/bot.mjs to-review [YYYY-MM-DD] [--kind post|comment] [--all] [--days 3]  # bài/comment chưa chấm: hôm qua + bù 3 ngày trước (mỗi bài có "date" riêng)
 //   node scripts/bot.mjs reviews --file reviews.json     # ghi kết quả chấm + nhận xét tổng (xem scripts/examples/)
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
 //   node scripts/bot.mjs kho-build                    # gom hỏi đáp Zalo nguyên văn vào kho trên máy (JSON + CSV)
@@ -116,15 +116,19 @@ async function main() {
         const evHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hourCycle: 'h23' }).format(statSync(ev).mtime))
         if (evHour >= 19) { writeFileSync(done, 'skip: evening vừa chạy'); return console.log('DONE') }
       }
-      writeFileSync(lock, new Date().toISOString())
+      writeFileSync(lock, new Date().toISOString() + (slot ? ' ' + slot : ''))
       if (job === 'scan') return console.log('GO since=' + (existsSync(lastScan) ? readFileSync(lastScan, 'utf8').trim() : new Date(Date.now() - 24 * 3600e3).toISOString()))
       return console.log('GO')
     }
     if (cmd === 'run-done') {
-      if (job === 'scan' && slot === null) die('Ngoài khung quét')
-      if (job !== 'morning') writeFileSync(lastScan, readFileSync(lock, 'utf8').trim() || new Date().toISOString())
-      writeFileSync(done, new Date().toISOString()); rmSync(lock, { force: true })
-      return console.log('OK: đã đánh dấu xong ' + job + (slot ? ' khung ' + slot + 'h' : ''))
+      // Khoá ghi "<ISO lúc bắt đầu> <khung>": lượt bắt đầu 10:55 xong 11:05 phải đánh dấu khung 08h,
+      // không được đánh dấu nhầm khung 11h (làm mất lượt 11h)
+      const [startedAt, startSlot] = (existsSync(lock) ? readFileSync(lock, 'utf8').trim() : '').split(' ')
+      const s = job === 'scan' ? startSlot || slot : slot
+      if (job === 'scan' && !s) die('Ngoài khung quét')
+      if (job !== 'morning') writeFileSync(lastScan, startedAt || new Date().toISOString())
+      writeFileSync(job === 'scan' ? join(dir, `scan-${today}-${s}.done`) : done, new Date().toISOString()); rmSync(lock, { force: true })
+      return console.log('OK: đã đánh dấu xong ' + job + (s ? ' khung ' + s + 'h' : ''))
     }
     if (cmd === 'run-fail') { rmSync(lock, { force: true }); return console.log('OK: đã nhả khóa ' + job) }
     die('Lệnh không hợp lệ: ' + cmd)
@@ -233,8 +237,11 @@ async function main() {
     await q(sb.from('seed_ideas').insert(rows))
     console.log(`OK: đã thêm ${rows.length} thẻ gợi ý cho ngày ${date}${a.replace ? ` (thay ${removed} thẻ cũ chưa ai nhận)` : ''}.`)
   } else if (cmd === 'to-review') {
+    // Không ghi ngày: lấy hôm qua + bài/comment CHƯA CHẤM của 3 ngày trước đó (bù khi lượt sáng bỏ bước chấm,
+    // như 07/11 và 10/11 mất trắng 24 + 62 bài). Ghi ngày cụ thể thì chỉ ngày đó như cũ.
     const day = a._[1] || addDays(vnToday(), -1)
-    let pq = sb.from('seeding_posts').select('*').eq('date', day)
+    const from = a._[1] ? day : addDays(day, -(Number(a.days ?? 3)))
+    let pq = sb.from('seeding_posts').select('*').gte('date', from).lte('date', day)
     if (a.kind) {
       if (!['post', 'comment'].includes(a.kind)) die('--kind phải là post hoặc comment')
       pq = pq.eq('kind', a.kind)
@@ -254,7 +261,7 @@ async function main() {
       group: p.group_name, kind: p.kind, question: p.question || null, idea_topic: ideas.find((i) => i.id === p.idea_id)?.topic || null,
       already_reviewed: doneSet.has(p.id), comment_text: p.target_id ? said[p.target_id] || null : null,
     }))
-    console.log(JSON.stringify({ date: day, total_posts: posts.length, to_review: out.length, posts: out }, null, 2))
+    console.log(JSON.stringify({ date: day, from, total_posts: posts.length, to_review: out.length, posts: out }, null, 2))
   } else if (cmd === 'reviews') {
     if (!a.file) die('Cần --file reviews.json')
     const input = JSON.parse(readFileSync(a.file, 'utf8'))

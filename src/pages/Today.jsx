@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../lib/api.js'
 import { vnToday, addDays, longDate, timeVN, ddmm } from '../lib/date.js'
 import { useToast } from '../App.jsx'
@@ -239,15 +239,55 @@ function Feedback({ yday, seen, onSeen }) {
 }
 
 // ---- Bước 2: nhận việc (cơ hội comment + thẻ gợi ý bài đăng) ----
-// Chữ dài: cắt còn N dòng, bấm để xem hết
-function Clamp({ text, lines }) {
+// Chữ dài: cắt còn N dòng, bấm để xem hết.
+// Đo chữ có bị cắt thật trên màn hình (không đoán theo số ký tự): trên điện thoại 1 dòng chỉ ~35 chữ,
+// đoán theo 60 ký tự/dòng làm câu hỏi bị cắt "…" mà không có nút Xem hết (Thiện báo 11/11).
+function useCut(ref, deps) {
+  const [cut, setCut] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const check = () => setCut(el.scrollHeight > el.clientHeight + 1)
+    check()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(check) : null
+    ro?.observe(el)
+    return () => ro?.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  return cut
+}
+
+function ClampText({ text, lines, open, onCut }) {
+  const ref = useRef(null)
+  const cut = useCut(ref, [text, lines, open])
+  useEffect(() => { if (!open) onCut?.(cut) }, [cut, open, onCut])
+  return <div ref={ref} className={'clamp' + (open ? ' open' : '')} style={{ WebkitLineClamp: open ? 'unset' : lines }}>{text}</div>
+}
+
+// Thẻ ý tưởng: câu hỏi + câu trả lời dùng chung 1 nút. Ô nào bị cắt cũng hiện nút, bấm là mở CẢ HAI ô.
+function IdeaQA({ q, ans, lines = 4 }) {
   const [open, setOpen] = useState(false)
-  const long = text.length > lines * 60 || text.split('\n').length > lines
+  const [cutQ, setCutQ] = useState(false)
+  const [cutA, setCutA] = useState(false)
+  const btn = (cutQ || cutA || open) && <button type="button" className="linkbtn" onClick={() => setOpen((v) => !v)}>{open ? 'Thu gọn' : 'Xem hết'}</button>
   return (
-    <div>
-      <div className={'clamp' + (open ? ' open' : '')} style={{ WebkitLineClamp: open ? 'unset' : lines }}>{text}</div>
-      {long && <button type="button" className="linkbtn" onClick={() => setOpen((v) => !v)}>{open ? 'Thu gọn' : 'Xem hết'}</button>}
-    </div>
+    <>
+      <div className="icell iq" data-l="Câu hỏi"><ClampText text={q} lines={lines} open={open} onCut={setCutQ} />{!ans && btn}</div>
+      <div className="icell ians" data-l="Câu trả lời">{ans ? <><ClampText text={ans} lines={lines} open={open} onCut={setCutA} />{btn}</> : <span className="sub">—</span>}</div>
+    </>
+  )
+}
+
+// Bài cần trả lời: nội dung bài là link mở bài gốc, cắt 2 dòng; bị cắt thì có nút Xem hết ngay dưới
+function TargetText({ t, href }) {
+  const ref = useRef(null)
+  const [open, setOpen] = useState(false)
+  const cut = useCut(ref, [t.question, open])
+  return (
+    <>
+      <a ref={ref} className={'tbody tlink' + (open ? ' open' : '')} href={href} target="_blank" rel="noreferrer" title="Mở bài gốc">{t.question}</a>
+      {(cut || open) && <button type="button" className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen((v) => !v)}>{open ? 'Thu gọn' : 'Xem hết'}</button>}
+    </>
   )
 }
 
@@ -310,7 +350,7 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
                     {t.status === 'new' && t.created_at > seenAt && <span className="chip new">Mới</span>}
                     {t.status === 'commented' && <span className="chip ok">Đã seeding</span>}
                   </div>
-                  <a className="tbody tlink" href={postHref(t)} target="_blank" rel="noreferrer" title="Mở bài gốc">{t.question}</a>
+                  <TargetText t={t} href={postHref(t)} />
                   {t.angle && <div className="kv"><b>Gợi ý trả lời:</b> {t.angle}</div>}
                   {t.status === 'commented' && (
                     <div className="said">✓ {nm(t.taken_by)} đã seeding{t.comment_text && <>: <b>“{t.comment_text}”</b></>} · bot kiểm tra sáng mai</div>
@@ -355,8 +395,7 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
                 const post = postOf[i.id]
                 return (
                   <div key={i.id} className={'irow' + (post ? ' got' : openForm === i.id ? ' doing' : '')}>
-                    <div className="icell iq" data-l="Câu hỏi"><Clamp text={i.question || i.topic} lines={4} /></div>
-                    <div className="icell ians" data-l="Câu trả lời">{ans ? <Clamp text={ans} lines={4} /> : <span className="sub">—</span>}</div>
+                    <IdeaQA q={i.question || i.topic} ans={ans} />
                     <div className="iwho">
                       {post && <><span className="iwho-got">✓ {nm(post.member_id)} đã seeding</span><a className="mini" href={post.url} target="_blank" rel="noreferrer">{post.group_name || 'xem bài'} ↗</a></>}
                       {!post && !readOnly && openForm === i.id && (

@@ -392,6 +392,7 @@ table.eff { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 
 .iwho-got { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; color: var(--ok-ink); font-size: 14px; }
 .clamp { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
 .clamp.open { display: block; }
+.tcard .tbody.open { display: block; -webkit-line-clamp: unset; white-space: pre-line; }
 .linkbtn { background: none; border: 0; padding: 2px 0 0; color: var(--red); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 @media (max-width: 760px) {
   .irow { grid-template-columns: 1fr auto; gap: 8px 10px; }

@@ -12,6 +12,7 @@
 //   node scripts/bot.mjs targets --file targets.json     # ghi "Cơ hội seeding" (bài người khác đáng vào comment)
 //   node scripts/bot.mjs kho-build                    # gom hỏi đáp Zalo nguyên văn vào kho trên máy (JSON + CSV)
 //   node scripts/bot.mjs kho-fill [--min 60]          # nạp hết kho hỏi đáp lên dashboard (kho ý tưởng chung, web hiện 30 câu)
+//   node scripts/bot.mjs affiliate --file aff.json     # đơn affiliate đã trả tiền (SELECT bên web Kỳ Tích): [{id,voucher_code,plan_key,amount_vnd,paid_at}]
 //   node scripts/bot.mjs market --file market.json      # báo cáo đối thủ cho cả team (xem scripts/examples/market.example.json)
 //   node scripts/bot.mjs target-url --file urls.json    # thay link tạm group#… bằng link bài thật: [{ "from", "to" }]
 //   node scripts/bot.mjs target-text --file texts.json  # sửa nội dung bài đã có: [{ "url", "question" }]
@@ -139,7 +140,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 32).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 33).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -439,6 +440,31 @@ async function main() {
     const ids = [].concat(a.id)
     const d = await q(sb.from('owner_docs').delete().eq('col', a.col).in('id', ids).select('id'))
     console.log(`OK: đã xoá ${d.length}/${ids.length} bản ghi ${a.col}.`)
+  } else if (cmd === 'affiliate') {
+    // Đơn affiliate: file là kết quả SELECT bên web Kỳ Tích (chỉ đọc), mỗi phần tử
+    // { id, voucher_code, plan_key, amount_vnd, paid_at } của payments status='paid'. KHÔNG kèm email/tên/user_id.
+    // Hoa hồng cố định 10% số tiền thực trả (Thiện chốt 12/11). Đơn đã có (trùng id) thì ghi đè số liệu.
+    if (!a.file) die('Cần --file affiliate.json')
+    const items = JSON.parse(readFileSync(a.file, 'utf8'))
+    if (!Array.isArray(items)) die('File phải là mảng đơn')
+    const codes = await q(sb.from('affiliate_codes').select('code,member_id').eq('active', true))
+    const byCode = Object.fromEntries(codes.map((c) => [c.code.toUpperCase(), c.member_id]))
+    const vnMonth = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit' }).format(new Date(iso)).slice(0, 7)
+    const skip = []
+    const rows = items.flatMap((o) => {
+      const code = String(o.voucher_code || '').trim().toUpperCase()
+      if (!o.id || !o.paid_at || !(code in byCode)) { skip.push(code || '(trống)'); return [] }
+      const amount = Math.max(0, Math.round(Number(o.amount_vnd) || 0))
+      return [{ payment_id: o.id, code, member_id: byCode[code], paid_at: o.paid_at, month: vnMonth(o.paid_at), plan_key: o.plan_key || null,
+        amount_vnd: amount, commission_vnd: Math.round(amount * 0.1), synced_at: new Date().toISOString() }]
+    })
+    if (rows.length) await q(sb.from('affiliate_orders').upsert(rows, { onConflict: 'payment_id' }))
+    const m = vnToday().slice(0, 7)
+    const all = await q(sb.from('affiliate_orders').select('member_id,amount_vnd,commission_vnd').eq('month', m))
+    const nm = Object.fromEntries(members.map((x) => [x.id, x.name]))
+    const sum = {}; for (const o of all) { const k = nm[o.member_id]; sum[k] = sum[k] || [0, 0, 0]; sum[k][0]++; sum[k][1] += o.amount_vnd; sum[k][2] += o.commission_vnd }
+    console.log(`OK: ghi ${rows.length} đơn${skip.length ? `, bỏ ${skip.length} (mã không có trong danh sách: ${[...new Set(skip)].join(', ')})` : ''}.`)
+    console.log(`Tháng ${m}: ` + (Object.entries(sum).map(([k, v]) => `${k} ${v[0]} đơn, ${v[1].toLocaleString('vi-VN')}đ, hoa hồng ${v[2].toLocaleString('vi-VN')}đ`).join(' · ') || 'chưa có đơn'))
   } else if (cmd === 'market') {
     // Báo cáo đối thủ / thị trường cho cả team (1 bản mỗi ngày, ghi lại thì đè bản cùng ngày)
     if (!a.file) die('Cần --file market.json')

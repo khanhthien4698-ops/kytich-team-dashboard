@@ -107,7 +107,17 @@ function seed() {
       suggestions: ['Đăng dự đoán đề trước 19h để ra trước Aptisweb', 'Làm 1 bài chữa Speaking dạng video ngắn'] },
     { id: uid(), date: addDays(today, -1), created_at: new Date().toISOString(), summary: 'Aptisweb.vn ra bộ đề Travel Club mới. Pre Aptis tăng tần suất đăng lên 4 bài/ngày.', competitors: [], suggestions: [] },
   ]
-  return { market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
+  // Affiliate: mỗi bạn 1 mã, vài đơn tháng này và tháng trước (số tiền giả)
+  const ym = (d) => d.slice(0, 7)
+  const prevMonthDay = addDays(today.slice(0, 8) + '01', -3)
+  const affiliate_codes = staff.map((m, i) => ({ code: ['KT-DEMO1', 'KT-DEMO2', 'KT-DEMO3'][i], member_id: m.id, active: true }))
+  const plans = [['month', 199000], ['quarter', 449000], ['week', 79000], ['half_year', 799000]]
+  const affiliate_orders = [[0, today, 0], [0, today, 1], [1, today, 2], [0, prevMonthDay, 3], [2, prevMonthDay, 0]].map(([si, d, pi], i) => {
+    const amount = Math.round(plans[pi][1] * 0.9)
+    return { payment_id: uid(), code: affiliate_codes[si].code, member_id: staff[si].id, paid_at: d + 'T0' + (i + 1) + ':15:00+07:00', month: ym(d), plan_key: plans[pi][0], amount_vnd: amount, commission_vnd: Math.round(amount * 0.1) }
+  })
+  const affiliate_payouts = [{ member_id: staff[0].id, month: ym(prevMonthDay), paid: true, paid_at: new Date().toISOString() }]
+  return { affiliate_codes, affiliate_orders, affiliate_payouts, market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
 }
 
 const db = seed()

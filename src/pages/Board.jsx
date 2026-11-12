@@ -5,6 +5,7 @@ import { useToast } from '../App.jsx'
 import { KIND_SHORT as KIND, targetToday } from './Today.jsx'
 import Review, { isBad } from '../components/Review.jsx'
 import { initials, greet, shortName } from '../components/ui.jsx'
+import Affiliate from '../components/Affiliate.jsx'
 
 // Số liệu 1 người trong 1 ngày. Màu: xanh = đủ việc + bài + comment; đỏ = không làm gì; vàng = có làm nhưng thiếu
 function dayStat(m, date, data, routines, today) {
@@ -175,6 +176,8 @@ export default function Board({ me, onOpen }) {
           )}
         </section>
       )}
+
+      <Affiliate me={me} members={members} />
 
       <Market reports={extra.market} />
 

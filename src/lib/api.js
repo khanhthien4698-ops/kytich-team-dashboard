@@ -150,6 +150,20 @@ export async function countFreeIdeas() {
 // Sửa link của dòng seeding (chủ dòng hoặc admin)
 export const updatePostUrl = (id, url) => q(sb.from('seeding_posts').update({ url }).eq('id', id))
 // Báo cáo đối thủ (bảng có từ SQL 005; chưa có bảng thì trả rỗng để web không lỗi)
+// ---------- Affiliate (SQL 008): mã giảm giá của từng bạn, đơn đã trả tiền, tháng đã trả hoa hồng ----------
+// RLS: Thiện thấy cả đội, nhân viên chỉ thấy của mình. Chưa chạy SQL 008 thì trả null (ẩn mục).
+export async function listAffiliate(fromMonth) {
+  const [c, o, p] = await Promise.all([
+    sb.from('affiliate_codes').select('*'),
+    sb.from('affiliate_orders').select('*').gte('month', fromMonth).order('paid_at', { ascending: false }),
+    sb.from('affiliate_payouts').select('*').gte('month', fromMonth),
+  ])
+  if (c.error || o.error || p.error) return null
+  return { codes: c.data || [], orders: o.data || [], payouts: p.data || [] }
+}
+export const setAffiliatePaid = (member_id, month, paid) =>
+  q(sb.from('affiliate_payouts').upsert({ member_id, month, paid, paid_at: paid ? new Date().toISOString() : null }, { onConflict: 'member_id,month' }))
+
 export async function listMarketReports(limit = 7) {
   const { data, error } = await sb.from('market_reports').select('*').order('date', { ascending: false }).limit(limit)
   return error ? [] : data || []

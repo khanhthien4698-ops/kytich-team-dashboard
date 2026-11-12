@@ -742,3 +742,31 @@ body.bv-mode { overflow: hidden; }
   body.bv-mode .topbar .nav button { font-size: 13px; padding: 6px 10px; white-space: nowrap; }
   body.bv-mode .bottom-nav { display: none; }
 }
+
+/* ---- Affiliate: hoa hồng 10% theo mã của từng bạn ---- */
+.aff .card-h { gap: 10px; }
+.aff-month { width: auto; margin-left: auto; min-height: 36px; padding: 6px 10px; }
+.aff-note { margin: -4px 0 12px; font-size: 13px; line-height: 1.5; }
+.aff-table { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.aff-row { display: grid; grid-template-columns: minmax(0, 1.6fr) 60px minmax(0, 1fr) minmax(0, 1fr) 90px; gap: 10px; align-items: center; width: 100%; padding: 11px 14px; border: 0; border-top: 1px solid var(--line-2); background: var(--card); color: var(--ink); font: inherit; font-size: 14px; text-align: left; }
+button.aff-row { cursor: pointer; }
+button.aff-row:hover, .aff-row.on { background: var(--tint); }
+.aff-head { border-top: 0; background: var(--bg); font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.aff-total { background: var(--bg); font-weight: 600; }
+.aff-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.aff-name { display: flex; flex-direction: column; min-width: 0; }
+.aff-code { font-size: 12px; color: var(--ink-3); font-family: ui-monospace, Menlo, monospace; }
+.aff-detail { padding: 10px 14px 14px; background: var(--tint); border-top: 1px dashed var(--line-3); display: flex; flex-direction: column; gap: 10px; }
+.aff-orders { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.aff-orders th { text-align: left; font-weight: 600; color: var(--ink-3); font-size: 12px; padding: 4px 6px; }
+.aff-orders td { padding: 6px; border-top: 1px solid var(--line-2); }
+.aff-paid { white-space: normal; }
+.aff-foot { margin: 10px 0 0; }
+@media (max-width: 640px) {
+  .aff-head { display: none; }
+  .aff-row { grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+  .aff-row .aff-who { grid-column: 1 / -1; }
+  .aff-row > span[data-l]::before { content: attr(data-l) ': '; color: var(--ink-3); font-size: 12px; }
+  .aff-total > span:first-child { grid-column: 1 / -1; }
+  .aff-orders th:nth-child(4), .aff-orders td:nth-child(4) { display: none; }
+}

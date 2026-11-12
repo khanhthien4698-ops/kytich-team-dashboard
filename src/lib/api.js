@@ -164,6 +164,19 @@ export async function listAffiliate(fromMonth) {
 export const setAffiliatePaid = (member_id, month, paid) =>
   q(sb.from('affiliate_payouts').upsert({ member_id, month, paid, paid_at: paid ? new Date().toISOString() : null }, { onConflict: 'member_id,month' }))
 
+// ---------- Lịch đi làm theo tuần (SQL 009) ----------
+// Chưa chạy SQL 009 thì trả null (ẩn mục). Nhân viên chỉ thêm được, không sửa (RLS); Thiện sửa được.
+export async function listSchedules(weeks, memberId) {
+  let s = sb.from('work_schedules').select('*').in('week_start', weeks)
+  if (memberId) s = s.eq('member_id', memberId)
+  const { data, error } = await s
+  return error ? null : data || []
+}
+export const submitSchedule = (member_id, week_start, days) =>
+  q(sb.from('work_schedules').insert({ member_id, week_start, days, submitted_at: new Date().toISOString() }))
+export const adminSaveSchedule = (member_id, week_start, days) =>
+  q(sb.from('work_schedules').upsert({ member_id, week_start, days, edited_by_admin_at: new Date().toISOString() }, { onConflict: 'member_id,week_start' }))
+
 export async function listMarketReports(limit = 7) {
   const { data, error } = await sb.from('market_reports').select('*').order('date', { ascending: false }).limit(limit)
   return error ? [] : data || []

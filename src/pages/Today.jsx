@@ -4,6 +4,7 @@ import { vnToday, addDays, longDate, timeVN, ddmm } from '../lib/date.js'
 import { useToast } from '../App.jsx'
 import Review from '../components/Review.jsx'
 import { Mascot, Sheet, greet, store, shortName } from '../components/ui.jsx'
+import { MySchedule } from '../components/Schedule.jsx'
 
 export const KIND = { post: 'Bài đăng', comment: 'Trả lời bài người khác' }
 export const KIND_SHORT = { post: 'Bài đăng', comment: 'Trả lời' }
@@ -164,6 +165,8 @@ export default function Today({ me, hasNav, viewId, onView }) {
           </div>
         )}
       </section>
+
+      {who.id === me.id && <MySchedule me={me} />}
 
       <Seeding tab={pickTab} setTab={setPickTab} seenAt={seenAt} who={who} me={me} readOnly={readOnly} targets={targets} pool={pool}
         teamPosts={teamPosts} groups={groups} nameOf={nameOf} date={date} nPost={nPost} qPost={qPost} nCmt={nCmt} qCmt={qCmt} reload={load} />

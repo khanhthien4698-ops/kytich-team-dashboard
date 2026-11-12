@@ -117,7 +117,13 @@ function seed() {
     return { payment_id: uid(), code: affiliate_codes[si].code, member_id: staff[si].id, paid_at: d + 'T0' + (i + 1) + ':15:00+07:00', month: ym(d), plan_key: plans[pi][0], amount_vnd: amount, commission_vnd: Math.round(amount * 0.1) }
   })
   const affiliate_payouts = [{ member_id: staff[0].id, month: ym(prevMonthDay), paid: true, paid_at: new Date().toISOString() }]
-  return { affiliate_codes, affiliate_orders, affiliate_payouts, market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
+  // Lịch đi làm: Thành viên 1, 2 phải điền; Thành viên 1 đã nộp tuần này
+  staff[0].fills_schedule = true; staff[1].fills_schedule = true
+  const wd = new Date(today + 'T00:00:00Z').getUTCDay()
+  const mon = addDays(today, wd === 0 ? -6 : 1 - wd)
+  const work_schedules = [{ member_id: staff[0].id, week_start: mon, submitted_at: new Date().toISOString(),
+    days: Object.fromEntries([0, 1, 2, 3, 4, 5].map((k) => [addDays(mon, k), k % 2 ? ['sang'] : ['sang', 'chieu']])) }]
+  return { work_schedules, affiliate_codes, affiliate_orders, affiliate_payouts, market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
 }
 
 const db = seed()

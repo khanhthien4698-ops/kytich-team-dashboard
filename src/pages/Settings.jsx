@@ -77,7 +77,7 @@ function MemberRow({ m, isNew, isSelf, onSave }) {
     e.preventDefault()
     if (!d.name.trim()) return
     const login_email = d.login_email.trim().toLowerCase()
-    onSave({ id: d.id, name: d.name.trim(), login_email: login_email ? api.toEmail(login_email) : null, role: d.role, seeding_quota: Number(d.seeding_quota) || 0, comment_quota: Number(d.comment_quota) || 0, active: d.active, sort_order: Number(d.sort_order) || 0 })
+    onSave({ id: d.id, name: d.name.trim(), login_email: login_email ? api.toEmail(login_email) : null, role: d.role, seeding_quota: Number(d.seeding_quota) || 0, comment_quota: Number(d.comment_quota) || 0, active: d.active, sort_order: Number(d.sort_order) || 0, ...('fills_schedule' in m ? { fills_schedule: !!d.fills_schedule } : {}) })
     if (isNew) setD(m)
   }
   return (
@@ -97,6 +97,7 @@ function MemberRow({ m, isNew, isSelf, onSave }) {
       </div>
       <div className="row">
         {!isNew && <label className="toggle"><input type="checkbox" checked={d.active} onChange={set('active')} disabled={isSelf} /> Đang làm</label>}
+        {!isNew && 'fills_schedule' in m && d.role === 'staff' && <label className="toggle" title="Phải điền lịch đi làm tuần sau vào thứ 7, Chủ nhật"><input type="checkbox" checked={!!d.fills_schedule} onChange={set('fills_schedule')} /> Điền lịch tuần</label>}
         <button className="btn sm" disabled={!dirty || !d.name.trim()}>{isNew ? 'Thêm' : 'Lưu'}</button>
       </div>
     </form>

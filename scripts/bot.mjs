@@ -15,6 +15,7 @@
 //   node scripts/bot.mjs affiliate --file aff.json     # đơn affiliate đã trả tiền (SELECT bên web Kỳ Tích): [{id,voucher_code,plan_key,amount_vnd,paid_at}]
 //   node scripts/bot.mjs review-moi [--hours 48|--since ISO]     # review đề Muse đẩy lên (bảng group_reviews), JSON
 //   node scripts/bot.mjs lang-nghe-moi [--hours 24|--since ISO]  # lắng nghe Muse đẩy lên (bảng group_listening, chỉ bot + Thiện đọc), JSON
+//   node scripts/bot.mjs nguon [--date YYYY-MM-DD]    # CHỈ ĐỌC: so nguồn bot / Muse trong ngày (bài cần trả lời, review, lắng nghe, lần Muse gọi)
 //   node scripts/bot.mjs market --file market.json      # báo cáo đối thủ cho cả team (xem scripts/examples/market.example.json)
 //   node scripts/bot.mjs target-url --file urls.json    # thay link tạm group#… bằng link bài thật: [{ "from", "to" }]
 //   node scripts/bot.mjs target-text --file texts.json  # sửa nội dung bài đã có: [{ "url", "question" }]
@@ -142,7 +143,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 35).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 36).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -496,6 +497,33 @@ async function main() {
     const table = isReview ? 'group_reviews' : 'group_listening'
     const rows = await q(sb.from(table).select('*').gt('created_at', since).order('created_at'))
     console.log(JSON.stringify({ since, count: rows.length, items: rows }, null, 2))
+  } else if (cmd === 'nguon') {
+    // So nguồn bot (Claude quét) và Muse trong 1 ngày, CHỈ ĐỌC. Không in tên người, nội dung bài hay mã.
+    const day = a.date || vnToday()
+    const from = new Date(day + 'T00:00:00+07:00').toISOString(), to = new Date(addDays(day, 1) + 'T00:00:00+07:00').toISOString()
+    const pid = (u) => (String(u).match(/\/groups\/[^/?#]+\/(?:posts|permalink)\/(\d+)/) || [])[1] || null
+    const count = (rows, k) => rows.reduce((o, r) => ((o[r[k]] = (o[r[k]] || 0) + 1), o), {})
+    const t = await q(sb.from('seed_targets').select('url,group_name,source,created_at').eq('date', day).order('created_at'))
+    const rv = await sb.from('group_reviews').select('url,group_name,source,created_at').gte('created_at', from).lt('created_at', to).order('created_at')
+    const ln = await sb.from('group_listening').select('url,group_name,kind,level,source,created_at').gte('created_at', from).lt('created_at', to).order('created_at')
+    const mc = await sb.from('muse_calls').select('fn,ok,added,note').gte('at', from).lt('at', to)
+    const calls = {}
+    for (const c of mc.data || []) {
+      const x = (calls[c.fn] ||= { lan_goi: 0, loi_ma_hoac_goi: 0, da_them: 0, trung: 0, loi: 0 })
+      x.lan_goi++
+      if (!c.ok) { x.loi_ma_hoac_goi++; continue }
+      x.da_them += c.added
+      const m = String(c.note || '').match(/trùng (\d+), lỗi (\d+)/)
+      if (m) { x.trung += +m[1]; x.loi += +m[2] }
+    }
+    const tRows = t.map((r) => ({ post_id: pid(r.url), group_name: r.group_name, source: r.source ?? 'bot', created_at: r.created_at }))
+    console.log(JSON.stringify({
+      date: day,
+      seed_targets: { tong: tRows.length, theo_nguon: count(tRows, 'source'), dong: tRows },
+      group_reviews: rv.error ? { loi: rv.error.message } : { tong: rv.data.length, theo_nguon: count(rv.data, 'source'), dong: rv.data.map((r) => ({ post_id: pid(r.url), group: r.group_name, source: r.source, created_at: r.created_at })) },
+      group_listening: ln.error ? { loi: ln.error.message } : { tong: ln.data.length, theo_nguon: count(ln.data, 'source'), dong: ln.data.map((r) => ({ post_id: pid(r.url), group: r.group_name, kind: r.kind, level: r.level, source: r.source, created_at: r.created_at })) },
+      muse_calls: mc.error ? { loi: mc.error.message } : calls,
+    }, null, 2))
   } else if (cmd === 'market') {
     // Báo cáo đối thủ / thị trường cho cả team (1 bản mỗi ngày, ghi lại thì đè bản cùng ngày)
     if (!a.file) die('Cần --file market.json')

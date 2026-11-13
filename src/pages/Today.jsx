@@ -381,6 +381,10 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
                     {t.assigned_to && <span className={'chip ' + (forMe ? 'mine' : '')}>Giao cho {forMe ? (who.id === me.id ? 'bạn' : shortName(who.name)) : shortName(nameOf[t.assigned_to] || '')}</span>}
                     {t.status === 'new' && t.created_at > seenAt && <span className="chip new">Mới</span>}
                     {t.status === 'commented' && <span className="chip ok">Đã seeding</span>}
+                    {t.status !== 'commented' && t.date < date && (() => {
+                      const n = Math.round((Date.parse(date) - Date.parse(t.date)) / 864e5)
+                      return <span className={'chip ' + (n >= 3 ? 'bad' : 'warn')}>{n === 1 ? 'Tồn từ hôm qua' : `Tồn ${n} ngày`}</span>
+                    })()}
                   </div>
                   <TargetText t={t} href={postHref(t)} />
                   {t.angle && <div className="kv"><b>Gợi ý trả lời:</b> {t.angle}</div>}

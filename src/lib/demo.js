@@ -92,7 +92,7 @@ function seed() {
     ['Bạn hỏi Writing Part 4 viết email trang trọng mở đầu thế nào', '3 câu mở mẫu + lỗi hay gặp'],
   ]
   const seed_targets = tq.map(([question, angle], i) => ({
-    id: uid(), date: i < 2 ? addDays(today, -1) : today, url: `https://facebook.com/groups/demo/posts/t${i}`,
+    id: uid(), date: addDays(today, i === 3 ? -3 : i < 2 || i === 4 ? -1 : 0), url: `https://facebook.com/groups/demo/posts/t${i}`,
     group_id: groups[i % 4].id, group_name: ['Key Aptis miễn phí - update liên tục', 'Hội review đề Aptis có tâm'][i % 2], question, angle, assigned_to: staff[i % 3].id,
     status: i === 0 ? 'commented' : i === 1 ? 'skipped' : i === 2 ? 'taken' : 'new', taken_by: i <= 2 ? staff[i % 3].id : null,
     taken_at: null, post_id: null, created_at: new Date().toISOString(),

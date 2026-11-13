@@ -292,14 +292,33 @@ function IdeaQA({ q, ans, lines = 4 }) {
 }
 
 // Bài cần trả lời: nội dung bài là link mở bài gốc, cắt 2 dòng; bị cắt thì có nút Xem hết ngay dưới
+// Chép chữ vào bộ nhớ tạm (điện thoại cũ không có clipboard API thì dùng cách chọn chữ)
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true } catch { /* thử cách dưới */ }
+  const ta = document.createElement('textarea')
+  ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length)
+  let ok = false
+  try { ok = document.execCommand('copy') } catch { ok = false }
+  ta.remove()
+  return ok
+}
+
+// Bài cần trả lời: nội dung bài là CHỮ THƯỜNG (bôi đen, chép được; trước là link nên trên điện thoại
+// giữ tay vào là mở link, không bôi được — Thiện báo 13/11). Mở bài gốc bằng nút riêng; có nút Chép nội dung.
 function TargetText({ t, href }) {
+  const notify = useToast()
   const ref = useRef(null)
   const [open, setOpen] = useState(false)
   const cut = useCut(ref, [t.question, open])
   return (
     <>
-      <a ref={ref} className={'tbody tlink' + (open ? ' open' : '')} href={href} target="_blank" rel="noreferrer" title="Mở bài gốc">{t.question}</a>
-      {(cut || open) && <button type="button" className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen((v) => !v)}>{open ? 'Thu gọn' : 'Xem hết'}</button>}
+      <div ref={ref} className={'tbody' + (open ? ' open' : '')}>{t.question}</div>
+      <div className="tacts">
+        {(cut || open) && <button type="button" className="linkbtn" onClick={() => setOpen((v) => !v)}>{open ? 'Thu gọn' : 'Xem hết'}</button>}
+        <button type="button" className="linkbtn" onClick={async () => { const ok = await copyText(t.question); notify(ok ? 'Đã chép nội dung bài' : 'Không chép được, hãy bôi đen chữ để chép', !ok) }}>Chép nội dung</button>
+        <a className="linkbtn" href={href} target="_blank" rel="noreferrer">Mở bài gốc ↗</a>
+      </div>
     </>
   )
 }
@@ -346,7 +365,7 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
 
       {tab === 'comment' && (
         <>
-          <div className="list-count">{you} đã trả lời <b>{nCmt}</b> bài hôm nay, còn <b>{qCmt - nCmt}</b> bài chưa trả lời. Bấm vào nội dung bài để mở bài gốc.</div>
+          <div className="list-count">{you} đã trả lời <b>{nCmt}</b> bài hôm nay, còn <b>{qCmt - nCmt}</b> bài chưa trả lời. Bấm “Mở bài gốc” để vào bài trên Facebook.</div>
           <div className="gtags">
             <button className={gFilter === '' ? 'on' : ''} onClick={() => setGFilter('')}>Tất cả <span>{openT.length + doneT.length}</span></button>
             {POST_GROUPS.map((g) => <button key={g} className={gFilter === g ? 'on' : ''} onClick={() => setGFilter(g)}>{GROUP_SHORT[g] || g} <span>{[...openT, ...doneT].filter((t) => t.group_name === g).length}</span></button>)}

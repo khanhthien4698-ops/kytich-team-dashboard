@@ -795,3 +795,8 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
 .sch-cell.none { color: var(--ink-3); }
 .sch-edit { margin-top: 12px; padding: 12px; border: 1px dashed var(--line-3); border-radius: 12px; background: var(--tint); display: flex; flex-direction: column; gap: 10px; }
 @media (max-width: 480px) { .sch-shift { min-width: 64px; } .sch-day { padding: 10px 12px; } .sch-row { padding: 9px 12px; grid-template-columns: 64px repeat(var(--n, 2), minmax(0, 1fr)); } }
+
+/* Bài cần trả lời: chữ bôi đen được + hàng nút Xem hết / Chép nội dung / Mở bài gốc */
+.tcard .tbody { -webkit-user-select: text; user-select: text; }
+.tacts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.tacts .linkbtn { padding: 4px 0; font-size: 13px; text-decoration: none; }

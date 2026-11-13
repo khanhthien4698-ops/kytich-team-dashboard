@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import * as api from '../lib/api.js'
 import { useToast } from '../App.jsx'
 import { Mascot } from '../components/ui.jsx'
+import MuseConnect from '../components/MuseConnect.jsx'
 
 const ROLE = { staff: 'Nhân viên', admin: 'Admin', bot: 'Bot' }
 
@@ -51,6 +52,8 @@ export default function Settings({ me }) {
         {routines.filter((r) => r.member_id === who).map((r) => <RoutineRow key={r.id} r={r} onSave={(row) => save(api.saveRoutine, row)} />)}
         {who && <RoutineRow key={'new' + who} r={{ member_id: who, title: '', note: '', active: true, sort_order: routines.filter((r) => r.member_id === who).length + 1 }} isNew onSave={(row) => save(api.saveRoutine, row, 'Đã thêm việc')} />}
       </section>
+
+      <MuseConnect me={me} />
 
       <section className="card">
         <div className="card-h"><h2>📣 Group Facebook</h2><span className="count">{groups.filter((g) => g.active).length} đang dùng</span></div>

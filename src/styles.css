@@ -800,3 +800,12 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
 .tcard .tbody { -webkit-user-select: text; user-select: text; }
 .tacts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
 .tacts .linkbtn { padding: 4px 0; font-size: 13px; text-decoration: none; }
+
+/* ---- Kết nối Muse (chỉ Thiện) ---- */
+.muse code { font-size: 12px; background: var(--bg); padding: 1px 5px; border-radius: 6px; word-break: break-all; }
+.muse-rows { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.muse-row { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--line-2); font-size: 13px; }
+.muse-row:first-child { border-top: 0; }
+.muse-fresh { margin-top: 12px; padding: 12px; border: 1.5px dashed var(--red); border-radius: 12px; background: var(--tint); display: flex; flex-direction: column; gap: 8px; }
+.muse-fresh code { font-size: 13px; }
+@media (max-width: 640px) { .muse-row { grid-template-columns: 1fr auto; } .muse-row > :first-child { grid-column: 1 / -1; font-weight: 600; } }

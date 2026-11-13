@@ -13,6 +13,8 @@
 //   node scripts/bot.mjs kho-build                    # gom hỏi đáp Zalo nguyên văn vào kho trên máy (JSON + CSV)
 //   node scripts/bot.mjs kho-fill [--min 60]          # nạp hết kho hỏi đáp lên dashboard (kho ý tưởng chung, web hiện 30 câu)
 //   node scripts/bot.mjs affiliate --file aff.json     # đơn affiliate đã trả tiền (SELECT bên web Kỳ Tích): [{id,voucher_code,plan_key,amount_vnd,paid_at}]
+//   node scripts/bot.mjs review-moi [--hours 48|--since ISO]     # review đề Muse đẩy lên (bảng group_reviews), JSON
+//   node scripts/bot.mjs lang-nghe-moi [--hours 24|--since ISO]  # lắng nghe Muse đẩy lên (bảng group_listening, chỉ bot + Thiện đọc), JSON
 //   node scripts/bot.mjs market --file market.json      # báo cáo đối thủ cho cả team (xem scripts/examples/market.example.json)
 //   node scripts/bot.mjs target-url --file urls.json    # thay link tạm group#… bằng link bài thật: [{ "from", "to" }]
 //   node scripts/bot.mjs target-text --file texts.json  # sửa nội dung bài đã có: [{ "url", "question" }]
@@ -140,7 +142,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 33).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 35).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -465,6 +467,14 @@ async function main() {
     const sum = {}; for (const o of all) { const k = nm[o.member_id]; sum[k] = sum[k] || [0, 0, 0]; sum[k][0]++; sum[k][1] += o.amount_vnd; sum[k][2] += o.commission_vnd }
     console.log(`OK: ghi ${rows.length} đơn${skip.length ? `, bỏ ${skip.length} (mã không có trong danh sách: ${[...new Set(skip)].join(', ')})` : ''}.`)
     console.log(`Tháng ${m}: ` + (Object.entries(sum).map(([k, v]) => `${k} ${v[0]} đơn, ${v[1].toLocaleString('vi-VN')}đ, hoa hồng ${v[2].toLocaleString('vi-VN')}đ`).join(' · ') || 'chưa có đơn'))
+  } else if (cmd === 'review-moi' || cmd === 'lang-nghe-moi') {
+    // Đọc dữ liệu Muse đẩy lên (SQL 010): review đề / lắng nghe mới hơn mốc. Mặc định review 48 giờ, lắng nghe 24 giờ.
+    // --since <ISO> để lấy sau đúng mốc (vd lần gom key trước). In JSON cho lịch trên máy đọc.
+    const isReview = cmd === 'review-moi'
+    const since = a.since || new Date(Date.now() - (Number(a.hours) || (isReview ? 48 : 24)) * 3600e3).toISOString()
+    const table = isReview ? 'group_reviews' : 'group_listening'
+    const rows = await q(sb.from(table).select('*').gt('created_at', since).order('created_at'))
+    console.log(JSON.stringify({ since, count: rows.length, items: rows }, null, 2))
   } else if (cmd === 'market') {
     // Báo cáo đối thủ / thị trường cho cả team (1 bản mỗi ngày, ghi lại thì đè bản cùng ngày)
     if (!a.file) die('Cần --file market.json')

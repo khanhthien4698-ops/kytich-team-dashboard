@@ -177,6 +177,20 @@ export const submitSchedule = (member_id, week_start, days) =>
 export const adminSaveSchedule = (member_id, week_start, days) =>
   q(sb.from('work_schedules').upsert({ member_id, week_start, days, edited_by_admin_at: new Date().toISOString() }, { onConflict: 'member_id,week_start' }))
 
+// ---------- Kết nối Muse (SQL 010): chỉ chủ (Thiện) thấy mục này ở Cài đặt ----------
+export const MUSE_BASE = URL ? URL.replace(/\/$/, '') + '/rest/v1/rpc/' : ''
+export const MUSE_APIKEY = KEY || ''
+export async function museStatus() {
+  const [k, c] = await Promise.all([
+    sb.from('muse_keys').select('key_hint,created_at,revoked_at,last_used_at').order('created_at', { ascending: false }).limit(5),
+    sb.from('muse_calls').select('at,fn,ok,added,note').order('at', { ascending: false }).limit(10),
+  ])
+  if (k.error) return null
+  return { keys: k.data || [], calls: c.error ? [] : c.data || [] }
+}
+export const museCreateKey = () => q(sb.rpc('muse_tao_ma'))
+export const museRevoke = () => q(sb.rpc('muse_thu_hoi_ma'))
+
 export async function listMarketReports(limit = 7) {
   const { data, error } = await sb.from('market_reports').select('*').order('date', { ascending: false }).limit(limit)
   return error ? [] : data || []

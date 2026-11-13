@@ -137,11 +137,36 @@ begin
   update public.muse_keys set last_used_at = now() where id = kid;
 end $$;
 
--- Link bài chuẩn: https://www.facebook.com/groups/<group>/posts/<số>/ ; trả null nếu sai dạng
-create or replace function public.muse_chuan_link(p_url text) returns text
+-- Tên rút gọn của group → mã số (cùng 1 group Facebook có 2 dạng link, vd hoireviewdeaptis = 1551779633112657).
+-- Bot quét và Muse ghi dạng nào cũng được đổi về dạng số trước khi lưu. Thêm dòng ở đây khi gặp group mới có tên rút gọn.
+create table if not exists public.fb_group_alias (
+  alias     text primary key,        -- tên rút gọn trong link, viết thường
+  group_num text not null            -- mã số group
+);
+insert into public.fb_group_alias (alias, group_num) values ('hoireviewdeaptis', '1551779633112657')
+on conflict (alias) do update set group_num = excluded.group_num;
+alter table public.fb_group_alias enable row level security;
+revoke all on public.fb_group_alias from anon, public;
+grant select on public.fb_group_alias to authenticated;
+drop policy if exists fb_group_alias_read on public.fb_group_alias;
+create policy fb_group_alias_read on public.fb_group_alias for select to authenticated using (public.is_member());
+
+-- Mã bài (số sau /posts/ hoặc /permalink/): dùng để chống trùng, vì 1 bài có thể có 2 dạng link
+create or replace function public.fb_post_id(p_url text) returns text
 language sql immutable as $$
+  select (regexp_match(coalesce(p_url, ''), '/groups/[^/?#]+/(?:posts|permalink)/([0-9]+)'))[1]
+$$;
+create index if not exists seed_targets_post_id_idx on public.seed_targets (public.fb_post_id(url));
+create index if not exists group_reviews_post_id_idx on public.group_reviews (public.fb_post_id(url));
+create index if not exists group_listening_post_id_idx on public.group_listening (public.fb_post_id(url));
+
+-- Link bài chuẩn: https://www.facebook.com/groups/<mã số group nếu biết>/posts/<mã bài>/ ; trả null nếu sai dạng
+create or replace function public.muse_chuan_link(p_url text) returns text
+language sql stable security definer set search_path = public as $$
   select case when m is null then null
-    else 'https://www.facebook.com/groups/' || m[1] || '/posts/' || m[2] || '/' end
+    else 'https://www.facebook.com/groups/'
+      || coalesce((select a.group_num from public.fb_group_alias a where a.alias = lower(m[1])), m[1])
+      || '/posts/' || m[2] || '/' end
   from (select regexp_match(coalesce(p_url, ''), '^https?://(?:www\.|m\.|web\.)?facebook\.com/groups/([A-Za-z0-9._-]+)/(?:posts|permalink)/([0-9]+)')) x(m)
 $$;
 
@@ -184,7 +209,7 @@ begin
     if g_id is null then errs := errs || jsonb_build_object('muc', i, 'loi', 'Chỉ nhận bài ở group "Key Aptis miễn phí - update liên tục" và "Hội review đề Aptis có tâm"'); continue; end if;
     if length(q) < 5 then errs := errs || jsonb_build_object('muc', i, 'loi', 'Thiếu nội dung bài (question)'); continue; end if;
     if length(q) > 5000 then q := left(q, 5000); end if;
-    if exists (select 1 from public.seed_targets where url = u or rtrim(url, '/') = rtrim(u, '/')) then dup := dup + 1; continue; end if;
+    if exists (select 1 from public.seed_targets where public.fb_post_id(url) = public.fb_post_id(u)) then dup := dup + 1; continue; end if;
 
     new_id := null; who := null;
     select member_id into who from _muse_load order by n::numeric / quota, ord, member_id limit 1;
@@ -217,6 +242,7 @@ begin
     c := btrim(coalesce(it ->> 'content', ''));
     if u is null then errs := errs || jsonb_build_object('muc', i, 'loi', 'Link phải dạng https://www.facebook.com/groups/<mã group>/posts/<mã bài>/'); continue; end if;
     if length(c) < 30 then errs := errs || jsonb_build_object('muc', i, 'loi', 'Thiếu nội dung đề (content), cần nguyên văn phần đề'); continue; end if;
+    if exists (select 1 from public.group_reviews where public.fb_post_id(url) = public.fb_post_id(u)) then dup := dup + 1; continue; end if;
     new_id := null;
     insert into public.group_reviews (url, group_name, posted_at, exam_date, shift, location, content, source)
     values (u, left(it ->> 'group', 200), left(it ->> 'posted_at', 40), left(it ->> 'exam_date', 40), left(it ->> 'shift', 40),
@@ -254,6 +280,7 @@ begin
     if k is null then errs := errs || jsonb_build_object('muc', i, 'loi', 'kind phải là ky_tich, doi_thu hoặc aptis_one_lab'); continue; end if;
     if lv is null then errs := errs || jsonb_build_object('muc', i, 'loi', 'level phải là cao, vua hoặc thap'); continue; end if;
     if length(qt) < 3 then errs := errs || jsonb_build_object('muc', i, 'loi', 'Thiếu trích dẫn (quote)'); continue; end if;
+    if exists (select 1 from public.group_listening where public.fb_post_id(url) = public.fb_post_id(u) and quote = left(qt, 600)) then dup := dup + 1; continue; end if;
     new_id := null;
     insert into public.group_listening (kind, label, level, posted_at, group_name, author, quote, sentiment, url, source)
     values (k, left(it ->> 'label', 100), lv, left(it ->> 'posted_at', 40), left(it ->> 'group', 200), left(it ->> 'author', 100),
@@ -277,5 +304,7 @@ select 'ok' as ket_qua;
 -- drop function if exists public.muse_them_bai_can_tra_loi(jsonb, text), public.muse_them_review(jsonb, text),
 --   public.muse_them_lang_nghe(jsonb, text), public.muse_kiem_ma(text, text), public.muse_chuan_link(text),
 --   public.muse_tao_ma(), public.muse_thu_hoi_ma();
--- drop table if exists public.group_listening, public.group_reviews, public.muse_calls, public.muse_keys;
+-- drop index if exists public.seed_targets_post_id_idx;
+-- drop table if exists public.group_listening, public.group_reviews, public.muse_calls, public.muse_keys, public.fb_group_alias;
+-- drop function if exists public.fb_post_id(text);
 -- alter table public.seed_targets drop column if exists source;

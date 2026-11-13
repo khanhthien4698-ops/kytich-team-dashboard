@@ -37,7 +37,8 @@ Thêm về mã:
 
 ## 3 tool (để viết prompt cho Muse)
 
-Link luôn phải là permalink `https://www.facebook.com/groups/<mã group>/posts/<mã bài>/`. Link có đuôi `?comment_id=…` hoặc `/permalink/` vẫn nhận, hệ thống tự đổi về dạng chuẩn.
+Link luôn phải là permalink `https://www.facebook.com/groups/<mã group>/posts/<mã bài>/`. Link có đuôi `?comment_id=…`, dạng `/permalink/`, hoặc dạng tên rút gọn của group (vd `groups/hoireviewdeaptis/...`) vẫn nhận. Hệ thống tự đổi về dạng số chuẩn.
+Chống trùng theo **mã bài** (số sau `/posts/`): cùng 1 bài ở 2 dạng link, Muse hay bot ghi trước, đều chỉ tính 1 lần. Lệnh bot `targets` cũng đã đổi theo cách này. Gặp group mới có tên rút gọn thì thêm 1 dòng vào bảng `fb_group_alias`.
 
 ### 1. Bài cần trả lời: `muse_them_bai_can_tra_loi`
 
@@ -97,6 +98,9 @@ Khi cần thì làm như sau:
   - Gửi lại bài đã có thì bỏ qua.
 - Review đề: link trùng và nội dung quá ngắn bị loại.
 - Lắng nghe: `kind` sai bị báo lỗi. Gọi không đăng nhập không đọc được bảng, nhân viên đọc bảng thấy 0 dòng.
+
+## Lưu ý dữ liệu cũ
+Trong `seed_targets` đang có 7 bài bị ghi 2 lần với 2 dạng link khác nhau, do bot ghi trước khi sửa. SQL 010 không xoá bài nào. Từ giờ sẽ không bị trùng thêm.
 
 ## Hoàn tác
 

@@ -316,15 +316,36 @@ async function main() {
       load[m.id]++
       return m.id
     }
-    const rows = items.map((t) => {
+    // Cùng 1 bài có 2 dạng link (vd groups/hoireviewdeaptis/... = groups/1551779633112657/...): đổi về dạng số
+    // và chống trùng theo MÃ BÀI, giống hàm Muse (SQL 010), để bot và Muse không ghi 1 bài 2 lần.
+    const alias = { hoireviewdeaptis: '1551779633112657' }
+    const al = await sb.from('fb_group_alias').select('alias,group_num') // có sau SQL 010; chưa có thì dùng bảng trên
+    if (!al.error) for (const r of al.data || []) alias[r.alias.toLowerCase()] = r.group_num
+    const norm = (u) => {
+      const m = String(u).match(/^https?:\/\/(?:www\.|m\.|web\.)?facebook\.com\/groups\/([A-Za-z0-9._-]+)\/(?:posts|permalink)\/(\d+)/)
+      return m ? `https://www.facebook.com/groups/${alias[m[1].toLowerCase()] || m[1]}/posts/${m[2]}/` : u
+    }
+    const postId = (u) => (String(u).match(/\/groups\/[^/?#]+\/(?:posts|permalink)\/(\d+)/) || [])[1]
+    const have = new Set()
+    for (let from = 0; ; from += 1000) {
+      const d = await q(sb.from('seed_targets').select('url').range(from, from + 999))
+      d.forEach((x) => { const id = postId(x.url); if (id) have.add(id) })
+      if (d.length < 1000) break
+    }
+    let dup = 0
+    const rows = items.flatMap((t) => {
       if (!/^https?:\/\//i.test(t.url || '')) die('Mỗi cơ hội cần "url" bắt đầu bằng https://')
       if (!t.question) die('Mỗi cơ hội cần "question" (nội dung bài nguyên văn, đã che thông tin cá nhân)')
+      const url = norm(t.url), id = postId(url)
+      if (id && have.has(id)) { dup++; return [] }
+      if (id) have.add(id)
       const g = groups.find((x) => x.name.toLowerCase() === String(t.group || '').toLowerCase())
-      return { date: t.date || vnToday(), url: t.url, group_id: g?.id ?? null, group_name: g?.name ?? t.group ?? null, question: t.question, angle: t.angle || null, assigned_to: t.assigned_to ? byName(t.assigned_to) : nextStaff() }
+      return [{ date: t.date || vnToday(), url, group_id: g?.id ?? null, group_name: g?.name ?? t.group ?? null, question: t.question, angle: t.angle || null, assigned_to: t.assigned_to ? byName(t.assigned_to) : nextStaff() }]
     })
     // Bài đã có (trùng url) thì giữ nguyên, không reset trạng thái người đã nhận
-    const added = await q(sb.from('seed_targets').upsert(rows, { onConflict: 'url', ignoreDuplicates: true }).select('id'))
-    console.log(`OK: thêm ${added.length} cơ hội mới (${rows.length - added.length} bài đã có, bỏ qua).`)
+    const added = rows.length ? await q(sb.from('seed_targets').upsert(rows, { onConflict: 'url', ignoreDuplicates: true }).select('id')) : []
+    dup += rows.length - added.length
+    console.log(`OK: thêm ${added.length} cơ hội mới (${dup} bài đã có, bỏ qua).`)
   } else if (cmd === 'kho-fill') {
     // Kho ý tưởng chung (Thiện chốt 06/11): nạp HẾT câu trong kho hỏi đáp chưa có trên dashboard; web luôn hiện 30 câu
     // chưa ai lấy và chưa bị bỏ qua. Còn ít hơn --min (mặc định 60) câu trống thì nạp lại câu cũ dùng lâu nhất.

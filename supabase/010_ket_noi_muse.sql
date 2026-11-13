@@ -189,7 +189,7 @@ begin
 
   -- tải hiện tại của từng người (bài mới đang giao + bài đã nhận chưa xong, ở 2 group seeding, từ 05/11)
   create temp table if not exists _muse_load (member_id uuid primary key, quota int, ord int, n int) on commit drop;
-  delete from _muse_load;
+  truncate _muse_load;   -- Supabase chặn DELETE không có WHERE
   insert into _muse_load
   select m.id, m.comment_quota, m.sort_order,
     (select count(*) from public.seed_targets t

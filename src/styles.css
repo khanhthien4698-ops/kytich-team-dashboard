@@ -809,3 +809,13 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
 .muse-fresh { margin-top: 12px; padding: 12px; border: 1.5px dashed var(--red); border-radius: 12px; background: var(--tint); display: flex; flex-direction: column; gap: 8px; }
 .muse-fresh code { font-size: 13px; }
 @media (max-width: 640px) { .muse-row { grid-template-columns: 1fr auto; } .muse-row > :first-child { grid-column: 1 / -1; font-weight: 600; } }
+
+/* Mục Threads (admin) */
+.th-list { display: flex; flex-direction: column; }
+.th-item { padding: 12px 0; border-top: 1px solid var(--line); }
+.th-item:first-child { border-top: 0; }
+.th-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.th-text { margin-top: 6px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.th-text.open { display: block; cursor: auto; }
+.th-meta { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.th-reply { margin-top: 6px; font-size: 13.5px; padding: 8px 10px; border-left: 3px solid var(--green-soft, #cdebd5); background: var(--line-2); border-radius: 6px; overflow-wrap: anywhere; }

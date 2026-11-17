@@ -28,6 +28,7 @@
 //   node scripts/bot.mjs bv-del --col tasks --id ID [--id ID2]  # xoá hẳn bản ghi Bàn việc (luật dọn việc xong quá 14 ngày)
 //   node scripts/bot.mjs chia-lai [--apply] [--deu]  # chia lại bài cần trả lời chưa ai nhận theo tỉ lệ ở tab Cài đặt (ô cmt/ngày); không --apply = chỉ xem
 //   node scripts/bot.mjs tien-do [--chot]  # in tin tiến độ seeding hôm nay của từng người (cho Telegram 10h/16h/21h); --chot thêm dòng chốt ngày
+//   node scripts/bot.mjs threads-day [--date YYYY-MM-DD] [--dir PATH]  # đẩy báo cáo đăng Threads (file bao-cao/<ngày>.json) lên mục Threads; mặc định hôm nay + hôm qua, file không đổi thì bỏ qua
 //   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
 //   Mọi lượt dùng chung Facebook nên không chạy chồng nhau. scan in "GO since=<ISO>" = lần đọc group gần nhất.
@@ -143,7 +144,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 36).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 37).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -174,6 +175,28 @@ async function main() {
     const m = members.find((x) => x.name.toLowerCase() === String(name).toLowerCase() || x.id === name)
     if (!m) die(`Không tìm thấy thành viên "${name}"`)
     return m.id
+  }
+
+  if (cmd === 'threads-day') {
+    // Chỉ đọc thư mục báo cáo của tool Threads, không sửa gì trong đó. Bỏ mọi trường có tên giống khoá/token cho chắc.
+    const dir = a.dir || env.THREADS_REPORT_DIR || join(homedir(), 'My Drive', 'Bai Threads - Ky Tich', '_dang-bai', 'bao-cao')
+    const days = a.date ? [].concat(a.date) : [vnToday(), addDays(vnToday(), -1)]
+    const SECRET = /token|secret|password|passwd|cookie|api_?key|session/i
+    const clean = (v) => Array.isArray(v) ? v.map(clean)
+      : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => !SECRET.test(k)).map(([k, x]) => [k, clean(x)])) : v
+    for (const d of days) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) die('Ngày phải dạng YYYY-MM-DD: ' + d)
+      const f = join(dir, d + '.json')
+      if (!existsSync(f)) { console.log(`${d}: không có file, bỏ qua`); continue }
+      let data
+      try { data = clean(JSON.parse(readFileSync(f, 'utf8'))) } catch (x) { console.log(`${d}: file đang ghi dở hoặc lỗi JSON, bỏ qua (${x.message})`); continue }
+      const capNhat = data.cap_nhat || null
+      const cur = await q(sb.from('threads_reports').select('cap_nhat').eq('ngay', d).maybeSingle())
+      if (cur && capNhat && Date.parse(cur.cap_nhat) === Date.parse(capNhat)) { console.log(`${d}: không đổi, bỏ qua`); continue }
+      await q(sb.from('threads_reports').upsert({ ngay: d, cap_nhat: capNhat, data, updated_at: new Date().toISOString() }))
+      console.log(`${d}: OK, ${data.bai?.length ?? 0} bài, ${data.binh_luan?.length ?? 0} bình luận, ${data.seeding?.length ?? 0} seeding`)
+    }
+    return
   }
 
   if (cmd === 'check') {

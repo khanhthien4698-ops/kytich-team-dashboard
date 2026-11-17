@@ -5,6 +5,7 @@ import Today from './pages/Today.jsx'
 import Board from './pages/Board.jsx'
 import Settings from './pages/Settings.jsx'
 import Effect from './pages/Effect.jsx'
+import Threads from './pages/Threads.jsx'
 
 const ToastCtx = createContext(() => {})
 export const useToast = () => useContext(ToastCtx)
@@ -58,6 +59,7 @@ const STAFF_TABS = [
 const ADMIN_TABS = [
   STAFF_TABS[0],
   { id: 'effect', ic: '📈', label: 'Hiệu quả' },
+  { id: 'threads', ic: '🧵', label: 'Threads' }, // chỉ admin; dữ liệu bảng threads_reports (RLS admin + bot)
   { id: 'settings', ic: '⚙️', label: 'Cài đặt' },
 ]
 
@@ -146,6 +148,7 @@ function Shell({ me }) {
         {tab === 'today' && (!isAdmin || viewId) && <Today me={me} hasNav viewId={viewId} onView={(id) => { setViewId(id); scrollTo({ top: 0 }) }} />}
         {tab === 'board' && <Board me={me} onOpen={openMember} />}
         {tab === 'effect' && isAdmin && <Effect />}
+        {tab === 'threads' && isAdmin && <Threads />}
         {tab === 'settings' && isAdmin && <Settings me={me} />}
       </main>
 

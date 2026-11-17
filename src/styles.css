@@ -821,3 +821,4 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
 .th-reply { margin-top: 6px; font-size: 13.5px; padding: 8px 10px; border-left: 3px solid var(--green-soft, #cdebd5); background: var(--line-2); border-radius: 6px; overflow-wrap: anywhere; }
 .th-tick { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; margin-left: auto; }
 .th-tick input { width: 18px; height: 18px; accent-color: var(--red); }
+.th-h { font-size: 14.5px; margin: 16px 0 8px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }

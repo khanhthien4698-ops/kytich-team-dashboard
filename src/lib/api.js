@@ -205,8 +205,10 @@ export async function getThreadsSeeding(date) {
   try {
     const { data } = await sb.from('threads_reports').select('data').eq('ngay', date).maybeSingle()
     const r = await sb.from('threads_seed_done').select('link,member_id,done_at').eq('ngay', date)
-    return { items: data?.data?.seeding || [], done: r.error ? null : r.data }
-  } catch { return { items: [], done: null } }
+    // items: comment seeding bài người khác; own: bài của các nick mình cần nhân viên vào comment (bai[].nv)
+    const own = (data?.data?.bai || []).filter((x) => x.nv && x.link)
+    return { items: data?.data?.seeding || [], own, done: r.error ? null : r.data }
+  } catch { return { items: [], own: [], done: null } }
 }
 export const markThreadsDone = (ngay, link, member_id) => q(sb.from('threads_seed_done').insert({ ngay, link, member_id }))
 export const unmarkThreadsDone = (ngay, link) => q(sb.from('threads_seed_done').delete().eq('ngay', ngay).eq('link', link))

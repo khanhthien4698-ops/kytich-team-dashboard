@@ -91,7 +91,7 @@ export default function Today({ me, hasNav, viewId, onView }) {
   const qCmt = nCmt + leftMine
   // Comment seeding Threads bot giao cho người này hôm nay (tính vào % trong ngày)
   const thDone = new Set((d.th.done || []).map((x) => x.link))
-  const thMine = d.th.items.filter((x) => x.giao === who.id)
+  const thMine = [...d.th.items, ...(d.th.own || [])].filter((x) => x.giao === who.id)
   const thOk = thMine.filter((x) => thDone.has(x.link)).length
   const units = totalR + qPost + qCmt + thMine.length
   const pct = units ? (doneR + Math.min(nPost, qPost) + nCmt + thOk) / units : 0
@@ -478,6 +478,10 @@ function ThreadsSeed({ who, me, readOnly, date, th, items, doneSet, reload }) {
   const [busy, setBusy] = useState(null)
   const you = who.id === me.id ? 'Bạn' : shortName(who.name)
   const ok = items.filter((x) => doneSet.has(x.link)).length
+  const seedItems = items.filter((x) => !x.nv), ownItems = items.filter((x) => x.nv)
+  const tickBox = (x, done) => !readOnly && th.done !== null && (
+    <label className="th-tick"><input type="checkbox" checked={done} disabled={busy === x.link} onChange={(e) => tick(x, e.target.checked)} /> Đã comment</label>
+  )
   const copy = (t) => navigator.clipboard.writeText(t).then(() => notify('Đã chép comment'), () => notify('Không chép được, bôi đen để chép nhé', true))
   async function tick(x, on) {
     setBusy(x.link)
@@ -486,11 +490,12 @@ function ThreadsSeed({ who, me, readOnly, date, th, items, doneSet, reload }) {
   }
   return (
     <>
-      <div className="list-count">{you} đã comment <b>{ok}/{items.length}</b> câu Threads hôm nay. Chép comment, mở bài, câu nào kèm ảnh thì mở ảnh, chép ảnh dán vào Threads. Đăng xong tích "Đã comment".</div>
+      <div className="list-count">{you} đã comment <b>{ok}/{items.length}</b> câu Threads hôm nay, gồm bài người khác và bài của nick Kỳ Tích. Comment bằng nick Threads của bạn, đăng xong tích "Đã comment".</div>
       {th.done === null && items.length > 0 && <div className="sub" style={{ margin: '6px 0' }}>Ô tích chưa dùng được (đang chờ bật bảng dữ liệu).</div>}
       {items.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Hôm nay chưa có comment Threads nào giao cho {you === 'Bạn' ? 'bạn' : you}.</div></div>}
+      {seedItems.length > 0 && <h3 className="th-h">Bài người khác <span className="sub">{seedItems.filter((x) => doneSet.has(x.link)).length}/{seedItems.length}</span></h3>}
       <div className="ideas two scroll-list">
-        {items.map((x) => {
+        {seedItems.map((x) => {
           const done = doneSet.has(x.link)
           return (
             <article key={x.link} className={'idea tcard' + (done ? ' mine' : '')}>
@@ -506,14 +511,35 @@ function ThreadsSeed({ who, me, readOnly, date, th, items, doneSet, reload }) {
                 <a className="btn sm ghost" href={x.link} target="_blank" rel="noreferrer">Mở bài ↗</a>
                 {x.anh_url ? <a className="btn sm ghost" href={x.anh_url} target="_blank" rel="noreferrer">Mở ảnh ↗</a>
                   : x.anh && <span className="sub">Ảnh: {x.anh} (chưa có link)</span>}
-                {!readOnly && th.done !== null && (
-                  <label className="th-tick"><input type="checkbox" checked={done} disabled={busy === x.link} onChange={(e) => tick(x, e.target.checked)} /> Đã comment</label>
-                )}
+                {tickBox(x, done)}
               </div>
             </article>
           )
         })}
       </div>
+      {ownItems.length > 0 && <>
+        <h3 className="th-h">Bài của mình <span className="sub">{ownItems.filter((x) => doneSet.has(x.link)).length}/{ownItems.length} · bài các nick Kỳ Tích vừa đăng, vào comment có nhắc Aptis Kỳ Tích</span></h3>
+        <div className="ideas two scroll-list">
+          {ownItems.map((x) => {
+            const done = doneSet.has(x.link)
+            return (
+              <article key={x.link} className={'idea tcard' + (done ? ' mine' : '')}>
+                <div className="idea-top">
+                  {x.nv.xung_ho && <span className="sub">Xưng {x.nv.xung_ho}, sửa cho hợp giọng bạn</span>}
+                  {done && <span className="chip ok">Đã comment</span>}
+                </div>
+                {x.chu && <div className="sub th-text">Bài: {x.chu}</div>}
+                <div className="th-text open">{x.nv.chu ? <><b>Gợi ý:</b> {x.nv.chu}</> : <i>Tự viết 1 câu có nhắc Aptis Kỳ Tích.</i>}</div>
+                <div className="foot" style={{ flexWrap: 'wrap' }}>
+                  {x.nv.chu && <button className="btn sm ghost" onClick={() => copy(x.nv.chu)}>Chép câu gợi ý</button>}
+                  <a className="btn sm ghost" href={x.link} target="_blank" rel="noreferrer">Mở bài ↗</a>
+                  {tickBox(x, done)}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      </>}
     </>
   )
 }

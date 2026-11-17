@@ -130,6 +130,8 @@ export default function Threads() {
                   <span className="chip">{b.nick}</span>
                   <span className={'chip ' + tone(b.trang_thai)}>{b.trang_thai_chu || b.trang_thai}</span>
                   {has(b.goc) && <span className="mini">{b.goc}</span>}
+                  {b.nv && b.giao && <span className="chip c">Giao {seedSt.names[b.giao] || '?'} comment</span>}
+                  {b.nv && b.giao && seedSt.done && (seedSt.done[b.link] ? <span className="chip ok">Đã comment {hm(seedSt.done[b.link].done_at)}</span> : <span className="chip warn">Chưa comment</span>)}
                   <span style={{ marginLeft: 'auto' }}><Link href={b.link}>Mở bài</Link></span>
                 </div>
                 <div className={'th-text' + (open[k] ? ' open' : '')} onClick={() => setOpen((o) => ({ ...o, [k]: !o[k] }))}>{b.chu}</div>

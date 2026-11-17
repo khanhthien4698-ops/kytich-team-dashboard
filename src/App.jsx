@@ -55,11 +55,12 @@ export default function App() {
 const STAFF_TABS = [
   { id: 'board', ic: '👥', label: 'Cả đội' },
   { id: 'today', ic: '✅', label: 'Việc của tôi' },
+  { id: 'threads', ic: '🧵', label: 'Threads' }, // cả team xem (Thiện mở 17/11); dữ liệu bảng threads_reports
 ]
 const ADMIN_TABS = [
   STAFF_TABS[0],
   { id: 'effect', ic: '📈', label: 'Hiệu quả' },
-  { id: 'threads', ic: '🧵', label: 'Threads' }, // chỉ admin; dữ liệu bảng threads_reports (RLS admin + bot)
+  STAFF_TABS[2],
   { id: 'settings', ic: '⚙️', label: 'Cài đặt' },
 ]
 
@@ -148,7 +149,7 @@ function Shell({ me }) {
         {tab === 'today' && (!isAdmin || viewId) && <Today me={me} hasNav viewId={viewId} onView={(id) => { setViewId(id); scrollTo({ top: 0 }) }} />}
         {tab === 'board' && <Board me={me} onOpen={openMember} />}
         {tab === 'effect' && isAdmin && <Effect />}
-        {tab === 'threads' && isAdmin && <Threads />}
+        {tab === 'threads' && <Threads />}
         {tab === 'settings' && isAdmin && <Settings me={me} />}
       </main>
 

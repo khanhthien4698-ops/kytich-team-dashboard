@@ -3,7 +3,7 @@ import { sb } from '../lib/api.js'
 import { vnToday, addDays, longDate, timeVN } from '../lib/date.js'
 import { useToast } from '../App.jsx'
 
-// Mục Threads (chỉ admin): báo cáo của tool đăng bài Threads trên máy Thiện.
+// Mục Threads (cả team xem, chỉ bot ghi): báo cáo của tool đăng bài Threads trên máy Thiện.
 // Bot đẩy file bao-cao/<ngày>.json lên bảng threads_reports sau mỗi lượt 15 phút (scripts/bot.mjs threads-day).
 
 const tone = (code) => (code === 'da_dang' || code === 'da_tra_loi' ? 'ok' : code === 'loi' || code === 'bi_dung' ? 'bad' : 'warn')

@@ -191,8 +191,18 @@ async function main() {
       let data
       try { data = clean(JSON.parse(readFileSync(f, 'utf8'))) } catch (x) { console.log(`${d}: file đang ghi dở hoặc lỗi JSON, bỏ qua (${x.message})`); continue }
       const capNhat = data.cap_nhat || null
-      const cur = await q(sb.from('threads_reports').select('cap_nhat').eq('ngay', d).maybeSingle())
-      if (cur && capNhat && Date.parse(cur.cap_nhat) === Date.parse(capNhat)) { console.log(`${d}: không đổi, bỏ qua`); continue }
+      const cur = await q(sb.from('threads_reports').select('cap_nhat,data').eq('ngay', d).maybeSingle())
+      const curSeed = cur?.data?.seeding || []
+      if (cur && capNhat && Date.parse(cur.cap_nhat) === Date.parse(capNhat) && curSeed.every((x) => x.giao)) { console.log(`${d}: không đổi, bỏ qua`); continue }
+      // Chia comment seeding cho nhân viên (Thiện yêu cầu 17/11): câu đã giao giữ nguyên người (theo link bài),
+      // câu mới giao cho người đang ít câu nhất trong ngày, nên mỗi ngày chia gần đều (20 câu = 7/7/6).
+      const staff = members.filter((m) => m.role === 'staff' && m.active && !/^Thành viên \d/.test(m.name)).sort((x, y) => (x.sort_order ?? 0) - (y.sort_order ?? 0) || x.id.localeCompare(y.id))
+      if (staff.length && Array.isArray(data.seeding)) {
+        const was = Object.fromEntries(curSeed.filter((x) => x.link && x.giao).map((x) => [x.link, x.giao]))
+        const load = Object.fromEntries(staff.map((m) => [m.id, 0]))
+        for (const x of data.seeding) if (was[x.link] in load) { x.giao = was[x.link]; load[x.giao]++ }
+        for (const x of data.seeding) if (!x.giao) { x.giao = staff.reduce((b, m) => (load[m.id] < load[b.id] ? m : b)).id; load[x.giao]++ }
+      }
       await q(sb.from('threads_reports').upsert({ ngay: d, cap_nhat: capNhat, data, updated_at: new Date().toISOString() }))
       console.log(`${d}: OK, ${data.bai?.length ?? 0} bài, ${data.binh_luan?.length ?? 0} bình luận, ${data.seeding?.length ?? 0} seeding`)
     }
@@ -441,6 +451,11 @@ async function main() {
     const posts = await q(sb.from('seeding_posts').select('member_id,kind').eq('date', today))
     const open = (await q(sb.from('seed_targets').select('group_name,date,status,assigned_to,taken_by').in('status', ['new', 'taken'])))
       .filter((t) => GROUPS.includes(t.group_name) && t.date >= FROM)
+    // Comment seeding Threads được giao trong ngày (threads_reports.data.seeding[].giao) và số câu đã tích (threads_seed_done)
+    const thRow = await q(sb.from('threads_reports').select('data').eq('ngay', today).maybeSingle())
+    const thSeed = thRow?.data?.seeding || []
+    const thDone = await sb.from('threads_seed_done').select('link,member_id').eq('ngay', today).then((r) => r.data || [])
+    const thDoneLinks = new Set(thDone.map((x) => x.link))
     const hour = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hourCycle: 'h23' }).format(new Date())
     const [, mm, dd] = today.split('-')
     const lines = [`📊 Seeding ${Number(hour)}h · ${dd}/${mm}`], warn = [], du = [], thieu = []
@@ -452,7 +467,9 @@ async function main() {
       const ct = open.filter((t) => (t.status === 'new' && t.assigned_to === m.id) || (t.status === 'taken' && t.taken_by === m.id)).length
       conDang += cd; conTL += ct
       const ok = cd === 0 && ct === 0
-      lines.push(`${ok ? '✅ ' : ''}${m.name}: đăng ${dang}/${qd}${cd ? ` (còn ${cd})` : ''} · đã trả lời ${tl}${ct ? `, còn ${ct} bài chưa trả lời` : ', hết bài cần trả lời'}`)
+      const thMine = thSeed.filter((x) => x.giao === m.id), thOk = thMine.filter((x) => thDoneLinks.has(x.link)).length
+      const th = thMine.length ? ` · Threads ${thOk}/${thMine.length}` : ''
+      lines.push(`${ok ? '✅ ' : ''}${m.name}: đăng ${dang}/${qd}${cd ? ` (còn ${cd})` : ''} · đã trả lời ${tl}${ct ? `, còn ${ct} bài chưa trả lời` : ', hết bài cần trả lời'}${th}`)
       if (!dang && !tl) warn.push(`⚠️ ${m.name} chưa làm bài nào hôm nay`)
       ;(ok ? du : thieu).push(ok ? m.name : `${m.name} còn ${[cd && cd + ' bài đăng', ct && ct + ' bài trả lời'].filter(Boolean).join(', ')}`)
     }

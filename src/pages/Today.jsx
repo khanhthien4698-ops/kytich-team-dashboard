@@ -49,14 +49,14 @@ export default function Today({ me, hasNav, viewId, onView }) {
     const y = addDays(t, -1)
     setDate(t)
     try {
-      const [ms, rs, day, pool, gs, targets, yday, yrev, fb, hist, teamPosts] = await Promise.all([
+      const [ms, rs, day, pool, gs, targets, yday, yrev, fb, hist, teamPosts, th] = await Promise.all([
         api.listMembers(), api.listRoutines(whoId), api.getDay(whoId, t), api.listIdeaPool(t), api.listGroups(),
         api.listActiveTargets(t), api.getDay(whoId, y), api.listReviewsSince(y), api.getFeedback(whoId, y),
-        api.listPostsRange(addDays(t, -14), y), api.listPostsRange(addDays(t, -7), t),
+        api.listPostsRange(addDays(t, -14), y), api.listPostsRange(addDays(t, -7), t), api.getThreadsSeeding(t),
       ])
       setMembers(ms)
       setD({
-        routines: rs.filter((r) => r.active), day, pool, groups: gs.filter((g) => g.active), targets: targets.filter((x) => targetToday(x, t)), teamPosts,
+        routines: rs.filter((r) => r.active), day, pool, groups: gs.filter((g) => g.active), targets: targets.filter((x) => targetToday(x, t)), teamPosts, th,
         yday: { posts: yday.posts, reviewOf: Object.fromEntries(yrev.map((r) => [r.post_id, r])), fb },
         hist: hist.filter((p) => p.member_id === whoId),
       })
@@ -89,8 +89,12 @@ export default function Today({ me, hasNav, viewId, onView }) {
   // Bài trả lời không có chỉ tiêu: có bao nhiêu bài giao cho mình thì trả lời hết (Thiện chốt 06/11)
   const leftMine = targets.filter((t) => (t.status === 'new' && t.assigned_to === who.id) || (t.status === 'taken' && t.taken_by === who.id)).length
   const qCmt = nCmt + leftMine
-  const units = totalR + qPost + qCmt
-  const pct = units ? (doneR + Math.min(nPost, qPost) + nCmt) / units : 0
+  // Comment seeding Threads bot giao cho người này hôm nay (tính vào % trong ngày)
+  const thDone = new Set((d.th.done || []).map((x) => x.link))
+  const thMine = d.th.items.filter((x) => x.giao === who.id)
+  const thOk = thMine.filter((x) => thDone.has(x.link)).length
+  const units = totalR + qPost + qCmt + thMine.length
+  const pct = units ? (doneR + Math.min(nPost, qPost) + nCmt + thOk) / units : 0
   const leftT = targets.filter((t) => (t.status === 'new' && t.assigned_to === who.id) || (t.status === 'taken' && t.taken_by === who.id)).length
   const yScores = yday.posts.map((p) => yday.reviewOf[p.id]?.score).filter(Boolean)
   const yAvg = yScores.length ? yScores.reduce((a, b) => a + b, 0) / yScores.length : null
@@ -119,6 +123,7 @@ export default function Today({ me, hasNav, viewId, onView }) {
   const goTab = (t) => { setPickTab(t); scrollToId('seeding') }
   todo.push({ ic: '💬', t: leftT === 0 ? 'Đã trả lời hết bài cần trả lời' : `Còn ${leftT} bài cần trả lời`, s: `Hôm nay đã trả lời ${nCmt} bài · có bài mới là trả lời hết`, btn: 'Xem bài', go: () => goTab('comment'), ok: leftT === 0 })
   todo.push({ ic: '📝', t: nPost >= qPost ? `Đủ ${qPost} bài seeding hôm nay` : `Còn ${qPost - nPost} bài seeding`, s: `Đã seeding ${nPost}/${qPost} bài · kho còn ${pool.free.length}+ ý tưởng`, btn: 'Xem ý tưởng', go: () => goTab('post'), ok: nPost >= qPost })
+  if (thMine.length) todo.push({ ic: '🧵', t: thOk >= thMine.length ? `Đủ ${thMine.length} comment Threads` : `Còn ${thMine.length - thOk} comment Threads`, s: `Đã comment ${thOk}/${thMine.length} câu · chép comment, mở bài, dán ảnh rồi tích`, btn: 'Xem comment', go: () => goTab('threads'), ok: thOk >= thMine.length })
   return (
     <>
       {/* ---- Đầu trang: 1 dòng tóm tắt ---- */}
@@ -132,6 +137,7 @@ export default function Today({ me, hasNav, viewId, onView }) {
               <span>Đã seeding <b>{nPost}/{qPost}</b> bài</span>
               <span>Đã trả lời <b>{nCmt}</b> bài</span>
               <span>Còn <b>{leftT}</b> bài cần trả lời</span>
+              {thMine.length > 0 && <span>Threads <b>{thOk}/{thMine.length}</b></span>}
               {yAvg && <span>Điểm bot hôm qua <b>★ {yAvg.toFixed(1).replace('.', ',')}</b></span>}
             </div>
           </div>
@@ -169,7 +175,8 @@ export default function Today({ me, hasNav, viewId, onView }) {
       {who.id === me.id && <MySchedule me={me} />}
 
       <Seeding tab={pickTab} setTab={setPickTab} seenAt={seenAt} who={who} me={me} readOnly={readOnly} targets={targets} pool={pool}
-        teamPosts={teamPosts} groups={groups} nameOf={nameOf} date={date} nPost={nPost} qPost={qPost} nCmt={nCmt} qCmt={qCmt} reload={load} />
+        teamPosts={teamPosts} groups={groups} nameOf={nameOf} date={date} nPost={nPost} qPost={qPost} nCmt={nCmt} qCmt={qCmt} reload={load}
+        th={d.th} thMine={thMine} thDone={thDone} />
 
       <div className="grid2">
         <Feedback yday={yday} seen={fbSeen} onSeen={() => store.set(fbKey, '1')} />
@@ -328,7 +335,7 @@ function ideaMeta(i) {
   if (!i.angle?.startsWith('meta:')) return null
   try { return JSON.parse(i.angle.slice(5)) } catch { return null }
 }
-function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPosts, groups, nameOf, date, nPost, qPost, nCmt, qCmt, reload }) {
+function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPosts, groups, nameOf, date, nPost, qPost, nCmt, qCmt, reload, th, thMine, thDone }) {
   const notify = useToast()
   const [busy, setBusy] = useState(null)
   const [openForm, setOpenForm] = useState(null) // id của dòng đang mở ô nhập
@@ -361,7 +368,10 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
       <div className="seg">
         <button className={tab === 'comment' ? 'on' : ''} onClick={() => setTab('comment')}>Bài cần trả lời {myOpen > 0 && <span className="count">{myOpen}</span>}</button>
         <button className={tab === 'post' ? 'on' : ''} onClick={() => setTab('post')}>Ý tưởng seeding <span className="count">{pool.free.length}</span></button>
+        <button className={tab === 'threads' ? 'on' : ''} onClick={() => setTab('threads')}>Comment Threads {thMine.length - thMine.filter((x) => thDone.has(x.link)).length > 0 && <span className="count">{thMine.length - thMine.filter((x) => thDone.has(x.link)).length}</span>}</button>
       </div>
+
+      {tab === 'threads' && <ThreadsSeed who={who} me={me} readOnly={readOnly} date={date} th={th} items={thMine} doneSet={thDone} reload={reload} />}
 
       {tab === 'comment' && (
         <>
@@ -456,6 +466,52 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
         </>
       )}
     </section>
+  )
+}
+
+// Comment seeding Threads: bot chia mỗi ngày cho từng người (Thiện yêu cầu 17/11). Chép comment, mở bài, mở ảnh để chép
+// dán vào Threads, xong tích "Đã comment" (lưu bảng threads_seed_done, bot tính vào tin tiến độ).
+function ThreadsSeed({ who, me, readOnly, date, th, items, doneSet, reload }) {
+  const notify = useToast()
+  const [busy, setBusy] = useState(null)
+  const you = who.id === me.id ? 'Bạn' : shortName(who.name)
+  const ok = items.filter((x) => doneSet.has(x.link)).length
+  const copy = (t) => navigator.clipboard.writeText(t).then(() => notify('Đã chép comment'), () => notify('Không chép được, bôi đen để chép nhé', true))
+  async function tick(x, on) {
+    setBusy(x.link)
+    try { on ? await api.markThreadsDone(date, x.link, who.id) : await api.unmarkThreadsDone(date, x.link); if (on) notify('Đã ghi. Cảm ơn bạn!') } catch (e) { notify(e.message, true) }
+    await reload(); setBusy(null)
+  }
+  return (
+    <>
+      <div className="list-count">{you} đã comment <b>{ok}/{items.length}</b> câu Threads hôm nay. Chép comment, mở bài, câu nào kèm ảnh thì mở ảnh, chép ảnh dán vào Threads. Đăng xong tích "Đã comment".</div>
+      {th.done === null && items.length > 0 && <div className="sub" style={{ margin: '6px 0' }}>Ô tích chưa dùng được (đang chờ bật bảng dữ liệu).</div>}
+      {items.length === 0 && <div className="all-done"><Mascot who="kyky" pose="search" className="" /><div className="sub">Hôm nay chưa có comment Threads nào giao cho {you === 'Bạn' ? 'bạn' : you}.</div></div>}
+      <div className="ideas two scroll-list">
+        {items.map((x) => {
+          const done = doneSet.has(x.link)
+          return (
+            <article key={x.link} className={'idea tcard' + (done ? ' mine' : '')}>
+              <div className="idea-top">
+                {x.nick && <span className="chip">{x.nick}</span>}
+                {x.anh && <span className="chip c">Kèm ảnh</span>}
+                {done && <span className="chip ok">Đã comment</span>}
+              </div>
+              <div className="th-text open">{x.comment}</div>
+              <div className="foot" style={{ flexWrap: 'wrap' }}>
+                <button className="btn sm ghost" onClick={() => copy(x.comment || '')}>Chép comment</button>
+                <a className="btn sm ghost" href={x.link} target="_blank" rel="noreferrer">Mở bài ↗</a>
+                {x.anh_url ? <a className="btn sm ghost" href={x.anh_url} target="_blank" rel="noreferrer">Mở ảnh ↗</a>
+                  : x.anh && <span className="sub">Ảnh: {x.anh} (chưa có link)</span>}
+                {!readOnly && th.done !== null && (
+                  <label className="th-tick"><input type="checkbox" checked={done} disabled={busy === x.link} onChange={(e) => tick(x, e.target.checked)} /> Đã comment</label>
+                )}
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </>
   )
 }
 

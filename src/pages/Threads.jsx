@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { sb } from '../lib/api.js'
+import { sb, listMembers, getThreadsSeeding } from '../lib/api.js'
 import { vnToday, addDays, longDate, timeVN } from '../lib/date.js'
 import { useToast } from '../App.jsx'
 
@@ -28,6 +28,7 @@ export default function Threads() {
   const [nick, setNick] = useState('')
   const [st, setSt] = useState('')
   const [open, setOpen] = useState({})
+  const [seedSt, setSeedSt] = useState({ names: {}, done: null })
 
   useEffect(() => {
     setRow(undefined)
@@ -38,6 +39,10 @@ export default function Threads() {
         if (/threads_reports|schema cache|does not exist/i.test(error.message)) return setRow(false)
         notify(error.message, true); setRow(null)
       })
+    // Ai được giao comment seeding nào, đã tích chưa (bảng threads_seed_done)
+    Promise.all([listMembers(), getThreadsSeeding(date)])
+      .then(([ms, th]) => setSeedSt({ names: Object.fromEntries(ms.map((m) => [m.id, m.name])), done: th.done && Object.fromEntries(th.done.map((x) => [x.link, x])) }))
+      .catch(() => {})
   }, [date, notify])
 
   const head = (
@@ -161,14 +166,16 @@ export default function Threads() {
       </section>
 
       <section className="card">
-        <div className="card-h"><h2>Comment seeding cần đăng tay</h2><span className="count">{seed.length}</span></div>
+        <div className="card-h"><h2>Comment seeding cần đăng tay</h2><span className="count">{seedSt.done ? `${seed.filter((s) => seedSt.done[s.link]).length}/${seed.length} đã comment` : seed.length}</span></div>
         {seed.length === 0 && <p className="empty">Hôm nay không có comment seeding nào.</p>}
         <div className="th-list">
           {seed.map((s, i) => (
             <div key={i} className="th-item">
               <div className="th-top">
                 <span className="chip">{s.nick}</span>
-                {has(s.anh) && <span className="mini">kèm ảnh: {s.anh}</span>}
+                {s.giao && <span className="chip c">Giao {seedSt.names[s.giao] || '?'}</span>}
+                {seedSt.done && (seedSt.done[s.link] ? <span className="chip ok">Đã comment {hm(seedSt.done[s.link].done_at)}</span> : <span className="chip warn">Chưa comment</span>)}
+                {has(s.anh_url) ? <a className="mini" href={s.anh_url} target="_blank" rel="noreferrer">Mở ảnh ↗</a> : has(s.anh) && <span className="mini">kèm ảnh: {s.anh}</span>}
                 <span style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}><Copy text={s.comment || ''} /><Link href={s.link}>Mở bài</Link></span>
               </div>
               <div className="th-text open">{s.comment}</div>

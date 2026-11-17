@@ -198,3 +198,15 @@ export async function listMarketReports(limit = 7) {
 export const skipIdea = (id) => q(sb.rpc('skip_idea', { p_idea: id }))
 export const listSkippedIdeasSince = (since) =>
   q(sb.from('seed_ideas').select('id,question,skipped_by,skipped_at').gte('skipped_at', since).order('skipped_at', { ascending: false }))
+
+// ---------- Comment seeding Threads (bot chia trong threads_reports.data.seeding[].giao; tích ở threads_seed_done) ----------
+// Bảng threads_seed_done chưa có (chưa chạy SQL 014) thì trả done = null để giao diện báo, không lỗi cả trang.
+export async function getThreadsSeeding(date) {
+  try {
+    const { data } = await sb.from('threads_reports').select('data').eq('ngay', date).maybeSingle()
+    const r = await sb.from('threads_seed_done').select('link,member_id,done_at').eq('ngay', date)
+    return { items: data?.data?.seeding || [], done: r.error ? null : r.data }
+  } catch { return { items: [], done: null } }
+}
+export const markThreadsDone = (ngay, link, member_id) => q(sb.from('threads_seed_done').insert({ ngay, link, member_id }))
+export const unmarkThreadsDone = (ngay, link) => q(sb.from('threads_seed_done').delete().eq('ngay', ngay).eq('link', link))

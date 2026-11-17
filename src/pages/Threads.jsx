@@ -10,6 +10,33 @@ const tone = (code) => (code === 'da_dang' || code === 'da_tra_loi' ? 'ok' : cod
 const hm = (ts) => (ts ? timeVN(ts) : '-')
 const n = (v) => Number(v) || 0
 const has = (v) => v != null && v !== '' && v !== 'None'
+const fmt = (v) => (v == null ? '-' : Number(v).toLocaleString('vi-VN'))
+// Tương tác = thích + trả lời + đăng lại + trích dẫn + chia sẻ (không tính lượt xem)
+const tuongTac = (s) => (s ? ['likes', 'replies', 'reposts', 'quotes', 'shares'].reduce((a, k) => a + n(s[k]), 0) : null)
+const SO_LIEU = [['views', 'Lượt xem'], ['likes', 'Thích'], ['replies', 'Trả lời'], ['reposts', 'Đăng lại'], ['quotes', 'Trích dẫn'], ['shares', 'Chia sẻ']]
+
+// Đường lượt xem 7 ngày (tong.so_lieu.views của từng ngày), SVG tự vẽ, ngày chưa có số thì bỏ trống
+function ViewsLine({ pts }) {
+  const W = 640, H = 150, P = { l: 44, r: 12, t: 14, b: 26 }
+  const vals = pts.map((p) => p.v).filter((v) => v != null)
+  if (!vals.length) return <p className="empty">Chưa có số lượt xem ngày nào trong 7 ngày này.</p>
+  const max = Math.max(...vals, 1)
+  const x = (i) => P.l + (i * (W - P.l - P.r)) / Math.max(pts.length - 1, 1)
+  const y = (v) => H - P.b - (v / max) * (H - P.t - P.b)
+  const segs = []; let cur = []
+  pts.forEach((p, i) => { if (p.v == null) { if (cur.length) segs.push(cur); cur = [] } else cur.push(`${x(i)},${y(p.v)}`) })
+  if (cur.length) segs.push(cur)
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }} role="img" aria-label="Lượt xem 7 ngày">
+      {[0, 0.5, 1].map((f) => <g key={f}><line x1={P.l} x2={W - P.r} y1={y(max * f)} y2={y(max * f)} stroke="var(--line)" /><text x={P.l - 6} y={y(max * f) + 4} textAnchor="end" fontSize="11" fill="var(--ink-3, #888)">{fmt(Math.round(max * f))}</text></g>)}
+      {segs.map((sg, i) => <polyline key={i} points={sg.join(' ')} fill="none" stroke="var(--red)" strokeWidth="2.5" strokeLinejoin="round" />)}
+      {pts.map((p, i) => <g key={p.d}>
+        {p.v != null && <circle cx={x(i)} cy={y(p.v)} r="3.5" fill="var(--red)"><title>{`${p.d.slice(8)}/${p.d.slice(5, 7)}: ${fmt(p.v)} lượt xem`}</title></circle>}
+        <text x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="var(--ink-3, #888)">{p.d.slice(8)}/{p.d.slice(5, 7)}</text>
+      </g>)}
+    </svg>
+  )
+}
 
 function Link({ href, children = 'Mở' }) {
   return has(href) ? <a href={href} target="_blank" rel="noreferrer">{children} ↗</a> : <span className="mini">-</span>
@@ -29,6 +56,8 @@ export default function Threads() {
   const [st, setSt] = useState('')
   const [open, setOpen] = useState({})
   const [seedSt, setSeedSt] = useState({ names: {}, done: null })
+  const [sortBy, setSortBy] = useState('gio')
+  const [trend, setTrend] = useState([])
 
   useEffect(() => {
     setRow(undefined)
@@ -38,6 +67,12 @@ export default function Threads() {
         // Bảng chưa tạo (chưa chạy supabase/012_threads.sql) thì báo nhẹ, không bật toast lỗi
         if (/threads_reports|schema cache|does not exist/i.test(error.message)) return setRow(false)
         notify(error.message, true); setRow(null)
+      })
+    // Lượt xem 7 ngày tới ngày đang xem
+    sb.from('threads_reports').select('ngay,sl:data->tong->so_lieu').gte('ngay', addDays(date, -6)).lte('ngay', date)
+      .then(({ data }) => {
+        const by = Object.fromEntries((data || []).map((r) => [r.ngay, r.sl]))
+        setTrend([6, 5, 4, 3, 2, 1, 0].map((k) => { const dd = addDays(date, -k); return { d: dd, v: by[dd]?.views ?? null } }))
       })
     // Ai được giao comment seeding nào, đã tích chưa (bảng threads_seed_done)
     Promise.all([listMembers(), getThreadsSeeding(date)])
@@ -71,7 +106,9 @@ export default function Threads() {
   const stList = [...new Map(bai.map((b) => [b.trang_thai, b.trang_thai_chu || b.trang_thai])).entries()]
   const shown = bai
     .filter((b) => (!nick || b.nick === nick) && (!st || b.trang_thai === st))
-    .sort((a, b) => String(a.luc_dang || a.gio_du_kien).localeCompare(String(b.luc_dang || b.gio_du_kien)))
+    .sort((a, b) => sortBy === 'xem' ? n(b.so_lieu?.views) - n(a.so_lieu?.views) || tuongTac(b.so_lieu) - tuongTac(a.so_lieu)
+      : String(a.luc_dang || a.gio_du_kien).localeCompare(String(b.luc_dang || b.gio_du_kien)))
+  const sl = t.so_lieu
   const kpi = [['Đã đăng', t.da_dang], ['Còn chờ', t.cho], ['Lỗi', t.loi], ['Bình luận nhận', t.binh_luan_nhan], ['Đã trả lời', t.da_tra_loi]]
 
   return (
@@ -84,10 +121,21 @@ export default function Threads() {
       </div>
 
       <section className="card">
+        <div className="card-h"><h2>Lượt xem và tương tác</h2><span className="count">{sl ? 'các bài đăng trong ngày' : 'chưa có số'}</span>
+          {!sl && <div className="hint mini">Tool chưa lấy được số liệu. Nick nào chưa cấp quyền số liệu thì cần lấy lại mã, xong tool cập nhật mỗi giờ.</div>}
+        </div>
+        <div className="kpis th-kpis">
+          {SO_LIEU.map(([k, l]) => <div key={k} className="kpi"><div className="lbl">{l}</div><div className="v">{fmt(sl?.[k])}</div></div>)}
+        </div>
+        <h3 className="th-h">Lượt xem 7 ngày</h3>
+        <ViewsLine pts={trend} />
+      </section>
+
+      <section className="card">
         <div className="card-h"><h2>Theo nick</h2><span className="count">{nicks.length} nick</span></div>
         <div className="board-scroll">
           <table className="eff">
-            <thead><tr><th>Nick</th><th>Góc viết</th><th>Đã đăng</th><th>Còn chờ</th><th>Lỗi</th><th>Tình trạng</th></tr></thead>
+            <thead><tr><th>Nick</th><th>Góc viết</th><th>Đã đăng</th><th>Còn chờ</th><th>Lỗi</th><th>Lượt xem</th><th>Tương tác</th><th>Người theo dõi</th><th>Tình trạng</th></tr></thead>
             <tbody>
               {nicks.map((k) => (
                 <tr key={k.ten}>
@@ -96,6 +144,9 @@ export default function Threads() {
                   <td>{n(k.da_dang)}</td>
                   <td>{n(k.cho)}</td>
                   <td style={n(k.loi) ? { color: 'var(--red)' } : undefined}>{n(k.loi)}</td>
+                  {k.chua_quyen_so_lieu
+                    ? <td colSpan={3}><span className="chip warn">Chưa cấp quyền số liệu</span></td>
+                    : <><td>{fmt(k.so_lieu?.views)}</td><td>{fmt(tuongTac(k.so_lieu))}</td><td>{fmt(k.nguoi_theo_doi)}</td></>}
                   <td>{k.bi_dung ? <span className="chip bad">Bị dừng</span> : <span className="chip ok">Đang chạy</span>}</td>
                 </tr>
               ))}
@@ -115,6 +166,10 @@ export default function Threads() {
             <select className="input" style={{ width: 'auto' }} value={st} onChange={(e) => setSt(e.target.value)}>
               <option value="">Mọi trạng thái</option>
               {stList.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+            </select>
+            <select className="input" style={{ width: 'auto' }} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="gio">Xếp theo giờ đăng</option>
+              <option value="xem">Xếp theo lượt xem</option>
             </select>
           </div>
         </div>
@@ -137,6 +192,7 @@ export default function Threads() {
                 <div className={'th-text' + (open[k] ? ' open' : '')} onClick={() => setOpen((o) => ({ ...o, [k]: !o[k] }))}>{b.chu}</div>
                 <div className="th-meta mini">
                   <span>Bình luận đầu: <span className={'chip ' + (!has(b.binh_luan_dau) || b.binh_luan_dau === 'chưa' ? 'warn' : 'ok')}>{has(b.binh_luan_dau) ? b.binh_luan_dau : 'chưa'}</span></span>
+                  {b.so_lieu && <span><b>{fmt(b.so_lieu.views)}</b> lượt xem · {fmt(b.so_lieu.likes)} thích · {fmt(b.so_lieu.replies)} trả lời{tuongTac(b.so_lieu) > n(b.so_lieu.likes) + n(b.so_lieu.replies) ? ` · ${fmt(tuongTac(b.so_lieu) - n(b.so_lieu.likes) - n(b.so_lieu.replies))} đăng lại/trích dẫn/chia sẻ` : ''}</span>}
                   {n(b.so_anh) > 0 && <span>{n(b.so_anh)} ảnh</span>}
                   <span>Bình luận: {n(b.so_binh_luan)} · đã trả lời {n(b.so_da_tra_loi)}</span>
                   {has(b.loi) && <span style={{ color: 'var(--red)' }}>Lỗi: {b.loi}</span>}

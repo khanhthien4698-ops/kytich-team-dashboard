@@ -28,7 +28,7 @@
 //   node scripts/bot.mjs bv-del --col tasks --id ID [--id ID2]  # xoá hẳn bản ghi Bàn việc (luật dọn việc xong quá 14 ngày)
 //   node scripts/bot.mjs chia-lai [--apply] [--deu]  # chia lại bài cần trả lời chưa ai nhận theo tỉ lệ ở tab Cài đặt (ô cmt/ngày); không --apply = chỉ xem
 //   node scripts/bot.mjs tien-do [--chot]  # in tin tiến độ seeding hôm nay của từng người (cho Telegram 10h/16h/21h); --chot thêm dòng chốt ngày
-//   node scripts/bot.mjs threads-day [--date YYYY-MM-DD] [--dir PATH]  # đẩy báo cáo đăng Threads (file bao-cao/<ngày>.json) lên mục Threads; mặc định hôm nay + hôm qua, file không đổi thì bỏ qua
+//   node scripts/bot.mjs threads-day [--date YYYY-MM-DD] [--dir PATH]  # đẩy báo cáo đăng Threads (file bao-cao/<ngày>.json) lên mục Threads; mặc định hôm nay + hôm qua, file không đổi thì bỏ qua; xoá bình luận người xem ở các ngày cũ hơn 7 ngày
 //   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
 //   Mọi lượt dùng chung Facebook nên không chạy chồng nhau. scan in "GO since=<ISO>" = lần đọc group gần nhất.
@@ -195,6 +195,15 @@ async function main() {
       if (cur && capNhat && Date.parse(cur.cap_nhat) === Date.parse(capNhat)) { console.log(`${d}: không đổi, bỏ qua`); continue }
       await q(sb.from('threads_reports').upsert({ ngay: d, cap_nhat: capNhat, data, updated_at: new Date().toISOString() }))
       console.log(`${d}: OK, ${data.bai?.length ?? 0} bài, ${data.binh_luan?.length ?? 0} bình luận, ${data.seeding?.length ?? 0} seeding`)
+    }
+    // Chính sách quyền riêng tư (hồ sơ Meta, Thiện duyệt 17/11): bình luận của người xem chỉ giữ tối đa 7 ngày.
+    // Dòng có ngày cũ hơn 7 ngày: làm rỗng data.binh_luan, giữ số đếm trong data.tong.
+    const cutoff = addDays(vnToday(), -7)
+    const old = await q(sb.from('threads_reports').select('ngay,data').lt('ngay', cutoff))
+    for (const r of old) {
+      if (!r.data?.binh_luan?.length) continue
+      await q(sb.from('threads_reports').update({ data: { ...r.data, binh_luan: [] }, updated_at: new Date().toISOString() }).eq('ngay', r.ngay))
+      console.log(`${r.ngay}: đã xoá ${r.data.binh_luan.length} bình luận cũ hơn 7 ngày`)
     }
     return
   }

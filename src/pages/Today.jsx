@@ -469,6 +469,8 @@ function Seeding({ tab, setTab, seenAt, who, me, readOnly, targets, pool, teamPo
   )
 }
 
+const xungHo = (t = '') => (/(^|[^\p{L}])(tớ|cậu)([^\p{L}]|$)/iu.test(t) ? 'tớ - cậu' : /(^|[^\p{L}])(m|b|mình|bạn)([^\p{L}]|$)/iu.test(t) ? 'm - b' : '')
+
 // Comment seeding Threads: bot chia mỗi ngày cho từng người (Thiện yêu cầu 17/11). Chép comment, mở bài, mở ảnh để chép
 // dán vào Threads, xong tích "Đã comment" (lưu bảng threads_seed_done, bot tính vào tin tiến độ).
 function ThreadsSeed({ who, me, readOnly, date, th, items, doneSet, reload }) {
@@ -493,7 +495,8 @@ function ThreadsSeed({ who, me, readOnly, date, th, items, doneSet, reload }) {
           return (
             <article key={x.link} className={'idea tcard' + (done ? ' mine' : '')}>
               <div className="idea-top">
-                {x.nick && <span className="chip">{x.nick}</span>}
+                {/* Bạn comment bằng nick Threads của mình (Thiện chốt 17/11): không hiện nick tool, chỉ ghi xưng hô của câu */}
+                {(() => { const xh = xungHo(x.comment); return xh && <span className="sub">Xưng {xh}, sửa cho hợp giọng bạn</span> })()}
                 {x.anh && <span className="chip c">Kèm ảnh</span>}
                 {done && <span className="chip ok">Đã comment</span>}
               </div>

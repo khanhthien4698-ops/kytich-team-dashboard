@@ -103,6 +103,9 @@ export default function Threads() {
   const bai = d.bai || []
   const bl = d.binh_luan || []
   const seed = d.seeding || []
+  // Nick đã bỏ (bị khoá hẳn) chỉ nằm trong nick_song: xếp xuống cuối bảng, ghi mờ
+  const dead = (d.nick_song || []).filter((k) => k.trang_thai_nick === 'bo' && !nicks.some((x) => x.ten === k.ten))
+  const songChu = (k) => (!n(k.ngay_song) ? 'chưa đăng' : `${n(k.ngay_song)} ngày`)
   const stList = [...new Map(bai.map((b) => [b.trang_thai, b.trang_thai_chu || b.trang_thai])).entries()]
   const shown = bai
     .filter((b) => (!nick || b.nick === nick) && (!st || b.trang_thai === st))
@@ -135,11 +138,14 @@ export default function Threads() {
         <div className="card-h"><h2>Theo nick</h2><span className="count">{nicks.length} nick</span></div>
         <div className="board-scroll">
           <table className="eff">
-            <thead><tr><th>Nick</th><th>Góc viết</th><th>Đã đăng</th><th>Còn chờ</th><th>Lỗi</th><th>Lượt xem</th><th>Tương tác</th><th>Người theo dõi</th><th>Tình trạng</th></tr></thead>
+            <thead><tr><th>Nick</th><th>Ngày sống</th><th>Góc viết</th><th>Đã đăng</th><th>Còn chờ</th><th>Lỗi</th><th>Lượt xem</th><th>Tương tác</th><th>Người theo dõi</th><th>Tình trạng</th></tr></thead>
             <tbody>
               {nicks.map((k) => (
                 <tr key={k.ten}>
                   <td><b>{k.ten}</b><div className="mini">{has(k.threads) ? <a href={`https://www.threads.com/@${k.threads}`} target="_blank" rel="noreferrer">@{k.threads}</a> : '-'}</div></td>
+                  <td title={k.ngay_dau ? `Bài đầu ngày ${k.ngay_dau.split('-').reverse().join('/')}` : undefined}>
+                    {songChu(k)}{k.trang_thai_nick === 'tam-dung' && <div><span className="chip bad">Đang bị khoá</span></div>}
+                  </td>
                   <td>{[].concat(k.goc || []).join(', ') || '-'}</td>
                   <td>{n(k.da_dang)}</td>
                   <td>{n(k.cho)}</td>
@@ -148,6 +154,14 @@ export default function Threads() {
                     ? <td colSpan={3}><span className="chip warn">Chưa cấp quyền số liệu</span></td>
                     : <><td>{fmt(k.so_lieu?.views)}</td><td>{fmt(tuongTac(k.so_lieu))}</td><td>{fmt(k.nguoi_theo_doi)}</td></>}
                   <td>{k.bi_dung ? <span className="chip bad">Bị dừng</span> : <span className="chip ok">Đang chạy</span>}</td>
+                </tr>
+              ))}
+              {dead.map((k) => (
+                <tr key={'bo-' + k.ten} style={{ opacity: 0.55 }}>
+                  <td><b>{k.ten}</b><div className="mini">{has(k.threads) ? '@' + k.threads : '-'}</div></td>
+                  <td>Chết sau {n(k.ngay_song)} ngày</td>
+                  <td colSpan={7} className="mini">{k.ly_do || 'Nick đã bỏ'}{k.ngay_het ? ` · ngừng ngày ${k.ngay_het.split('-').reverse().join('/')}` : ''}</td>
+                  <td><span className="chip">Đã bỏ</span></td>
                 </tr>
               ))}
             </tbody>

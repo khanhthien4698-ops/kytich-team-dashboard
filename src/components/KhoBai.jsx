@@ -122,6 +122,23 @@ export default function KhoBai({ me }) {
       </section>
 
       <section className="card">
+        <details className="kho-hd" open={me.role !== 'admin'}>
+          <summary><b>Hướng dẫn đăng</b> (đọc trước khi đăng)</summary>
+          <p><b>Chỉ tiêu: 15 bài mỗi ngày</b>, đăng bằng nick Threads của Châu.</p>
+          <ol>
+            <li>Trước bài đầu tiên, thêm vào phần giới thiệu của hồ sơ: <b>Làm ở EPIX TOEIC</b>.</li>
+            <li>Mỗi bài: chép chữ, tải đúng ảnh đi kèm, đăng, rồi bấm "Đã đăng" ở đây (dán link bài nếu được).</li>
+            <li>Đăng rải từ sáng tới tối, mỗi bài cách nhau khoảng 45-60 phút. Đừng đăng dồn.</li>
+            <li>Bài đố câu: 2-3 tiếng sau mới đăng bình luận đáp án.</li>
+            <li>Ai comment thì trả lời bằng lời của Châu. Hỏi về EPIX mà không chắc thì hỏi Thiện, đừng đoán.</li>
+            <li>Không dùng nick phụ hay nhờ nick ảo vào thích, comment bài của mình.</li>
+            <li>Được sửa chữ cho hợp giọng Châu, nhưng giữ câu "mình làm ở EPIX TOEIC" ở bài giới thiệu web. Không thêm chuyện chưa xảy ra (điểm thi, đã đậu...).</li>
+            <li>Thấy Threads cảnh báo, hạn chế nick hoặc lượt xem tụt hẳn thì dừng và báo Thiện.</li>
+          </ol>
+        </details>
+      </section>
+
+      <section className="card">
         {head}
         {queue.length === 0 && <p className="empty">Hết bài chờ đăng. Bài mới nạp vào kho sẽ hiện ở đây.</p>}
         <div className="th-list">
@@ -135,11 +152,11 @@ export default function KhoBai({ me }) {
                   {x.ngay_goi_y && x.ngay_goi_y < today && <span className="chip warn">Tồn từ {x.ngay_goi_y.slice(8)}/{x.ngay_goi_y.slice(5, 7)}</span>}
                 </div>
                 <div className="th-text open kho-chu">{x.chu}</div>
-                {x.binh_luan_dau && <div className="th-reply"><b>Bình luận đầu:</b> {x.binh_luan_dau}</div>}
+                {x.binh_luan_dau && <div className="th-reply"><b>Đáp án (bình luận sau 2-3 tiếng):</b> {x.binh_luan_dau}</div>}
                 <div className="kho-act">
                   <button className="btn ghost sm" onClick={() => copy(x.chu, 'bài')}>Chép bài</button>
                   {x.anh && <button className="btn ghost sm" onClick={() => download(x)}>Tải ảnh</button>}
-                  {x.binh_luan_dau && <button className="btn ghost sm" onClick={() => copy(x.binh_luan_dau, 'bình luận đầu')}>Chép bình luận đầu</button>}
+                  {x.binh_luan_dau && <button className="btn ghost sm" onClick={() => copy(x.binh_luan_dau, 'đáp án')}>Chép đáp án</button>}
                 </div>
                 <div className="kho-done">
                   <input className="input" placeholder="Dán link bài đã đăng (không bắt buộc)" value={links[x.ma] || ''} onChange={(e) => setLinks((l) => ({ ...l, [x.ma]: e.target.value }))} />

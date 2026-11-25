@@ -893,3 +893,6 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
   .kho-img.sm { width: 64px; }
   .kho-done .btn { flex: 1; }
 }
+.kho-hd summary { cursor: pointer; font-size: 15px; }
+.kho-hd p, .kho-hd ol { margin: 10px 0 0; font-size: 14px; line-height: 1.55; }
+.kho-hd ol { padding-left: 22px; }

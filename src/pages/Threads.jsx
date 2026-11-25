@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { sb, listMembers, getThreadsSeeding } from '../lib/api.js'
 import { vnToday, addDays, longDate, timeVN } from '../lib/date.js'
 import { useToast } from '../App.jsx'
+import KhoBai from '../components/KhoBai.jsx'
 
 // Mục Threads (cả team xem, chỉ bot ghi): báo cáo của tool đăng bài Threads trên máy Thiện.
 // Bot đẩy file bao-cao/<ngày>.json lên bảng threads_reports sau mỗi lượt 15 phút (scripts/bot.mjs threads-day).
@@ -47,7 +48,25 @@ function Copy({ text }) {
   return <button className="btn ghost sm" onClick={() => navigator.clipboard.writeText(text).then(() => notify('Đã chép comment'), () => notify('Không chép được', true))}>Chép</button>
 }
 
-export default function Threads() {
+// Tab Threads (Thiện 25/11): kho bài EPIX đăng tay ở trên; báo cáo tool đăng bài Kỳ Tích cũ ẩn đi
+// (chỉ ẩn giao diện, dữ liệu và bot giữ nguyên). Quản lý vẫn mở xem được ở cuối trang.
+export default function Threads({ me }) {
+  const [old, setOld] = useState(false)
+  return (
+    <>
+      <div className="page-h"><div><h1>Threads</h1><div className="sub">Kho bài EPIX đăng tay, chỉ tiêu 15 bài/ngày</div></div></div>
+      <KhoBai me={me} />
+      {me.role === 'admin' && (
+        <section className="card">
+          <button className="btn ghost sm" onClick={() => setOld(!old)}>{old ? 'Ẩn báo cáo tool cũ' : 'Xem báo cáo tool đăng bài cũ'}</button>
+        </section>
+      )}
+      {old && me.role === 'admin' && <OldReport />}
+    </>
+  )
+}
+
+function OldReport() {
   const notify = useToast()
   const today = vnToday()
   const [date, setDate] = useState(today)

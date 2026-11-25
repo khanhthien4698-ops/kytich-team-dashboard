@@ -29,6 +29,7 @@
 //   node scripts/bot.mjs chia-lai [--apply] [--deu]  # chia lại bài cần trả lời chưa ai nhận theo tỉ lệ ở tab Cài đặt (ô cmt/ngày); không --apply = chỉ xem
 //   node scripts/bot.mjs tien-do [--chot]  # in tin tiến độ seeding hôm nay của từng người (cho Telegram 10h/16h/21h); --chot thêm dòng chốt ngày
 //   node scripts/bot.mjs threads-day [--date YYYY-MM-DD] [--dir PATH]  # đẩy báo cáo đăng Threads (file bao-cao/<ngày>.json) lên mục Threads; mặc định hôm nay + hôm qua, file không đổi thì bỏ qua; xoá bình luận người xem ở các ngày cũ hơn 7 ngày
+//   node scripts/bot.mjs threads-kho [--file PATH] [--dry]  # nạp kho bài Threads EPIX (kho-bai.json + thư mục ảnh cạnh nó) lên tab Threads; upsert theo "ma", chạy lại an toàn, không đụng trạng thái "đã đăng"; ảnh đã có cùng dung lượng thì bỏ qua
 //   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
 //   Mọi lượt dùng chung Facebook nên không chạy chồng nhau. scan in "GO since=<ISO>" = lần đọc group gần nhất.
@@ -175,6 +176,61 @@ async function main() {
     const m = members.find((x) => x.name.toLowerCase() === String(name).toLowerCase() || x.id === name)
     if (!m) die(`Không tìm thấy thành viên "${name}"`)
     return m.id
+  }
+
+  if (cmd === 'threads-kho') {
+    // Chỉ đọc file kho bài, không sửa gì trong thư mục đó. Trạng thái đã đăng nằm ở bảng khác nên upsert không làm mất.
+    const file = a.file || env.THREADS_KHO_FILE || join(homedir(), 'My Drive', 'Bai Threads - EPIX', 'Kho bai Chau', 'kho-bai.json')
+    if (!existsSync(file)) die('Không thấy file ' + file)
+    let list
+    try { list = JSON.parse(readFileSync(file, 'utf8')) } catch (x) { die('File lỗi JSON: ' + x.message) }
+    if (!Array.isArray(list)) die('File phải là một mảng bài')
+    const base = dirname(file)
+    const MA = /^[A-Za-z0-9_-]{3,60}$/
+    const rows = [], imgs = [], bad = []
+    for (const [i, x] of list.entries()) {
+      const where = `bài ${i + 1}${x?.ma ? ' (' + x.ma + ')' : ''}`
+      if (!x || !MA.test(x.ma || '')) { bad.push(where + ': mã sai'); continue }
+      if (!String(x.chu || '').trim()) { bad.push(where + ': thiếu chữ bài'); continue }
+      if (x.ngay_goi_y && !/^\d{4}-\d{2}-\d{2}$/.test(x.ngay_goi_y)) { bad.push(where + ': ngay_goi_y sai dạng'); continue }
+      let anh = null
+      if (x.anh) {
+        const rel = String(x.anh)
+        const ext = (rel.match(/\.(png|jpe?g|webp)$/i) || [])[1]?.toLowerCase()
+        const abs = join(base, rel)
+        if (!ext || rel.includes('..') || rel.startsWith('/')) { bad.push(where + ': đường dẫn ảnh sai'); continue }
+        if (!existsSync(abs)) { bad.push(where + ': không thấy ảnh ' + rel); continue }
+        anh = `${x.ma}.${ext}`
+        imgs.push({ abs, anh, ext, size: statSync(abs).size })
+      }
+      rows.push({ ma: x.ma, ngay_goi_y: x.ngay_goi_y || null, stt: Number.isInteger(x.stt) ? x.stt : null, loai: x.loai || null,
+        chu: String(x.chu).trim(), binh_luan_dau: x.binh_luan_dau ? String(x.binh_luan_dau).trim() : null, anh, cap_nhat: new Date().toISOString() })
+    }
+    if (bad.length) { console.log('Bỏ qua ' + bad.length + ' bài lỗi:\n  ' + bad.join('\n  ')) }
+    if (a.dry) return console.log(`Thử: ${rows.length} bài hợp lệ, ${imgs.length} ảnh. Chưa ghi gì.`)
+    // Ảnh: chỉ tải ảnh mới hoặc đổi dung lượng
+    const have = {}
+    for (let off = 0; ; off += 1000) {
+      const { data, error } = await sb.storage.from('threads-kho').list('', { limit: 1000, offset: off })
+      if (error) die('Không đọc được kho ảnh: ' + error.message)
+      for (const o of data) have[o.name] = o.metadata?.size
+      if (data.length < 1000) break
+    }
+    let up = 0
+    for (const im of imgs) {
+      if (have[im.anh] === im.size) continue
+      const type = im.ext === 'png' ? 'image/png' : im.ext === 'webp' ? 'image/webp' : 'image/jpeg'
+      const { error } = await sb.storage.from('threads-kho').upload(im.anh, readFileSync(im.abs), { contentType: type, upsert: true })
+      if (error) die(`Tải ảnh ${im.anh} lỗi: ${error.message}`)
+      up++
+    }
+    for (let i = 0; i < rows.length; i += 200) await q(sb.from('threads_kho_bai').upsert(rows.slice(i, i + 200), { onConflict: 'ma' }))
+    const posted = await q(sb.from('threads_kho_dang').select('ma'))
+    const done = new Set(posted.map((x) => x.ma))
+    const all = await q(sb.from('threads_kho_bai').select('ma'))
+    const left = all.filter((x) => !done.has(x.ma)).length
+    console.log(`OK: ${rows.length} bài (thêm mới hoặc cập nhật), tải ${up} ảnh mới. Hàng chờ còn ${left} bài${left < 30 ? ' (dưới 30, nên nạp thêm)' : ''}.`)
+    return
   }
 
   if (cmd === 'threads-day') {

@@ -123,7 +123,15 @@ function seed() {
   const mon = addDays(today, wd === 0 ? -6 : 1 - wd)
   const work_schedules = [{ member_id: staff[0].id, week_start: mon, submitted_at: new Date().toISOString(),
     days: Object.fromEntries([0, 1, 2, 3, 4, 5].map((k) => [addDays(mon, k), k % 2 ? ['sang'] : ['sang', 'chieu']])) }]
-  return { work_schedules, affiliate_codes, affiliate_orders, affiliate_payouts, market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
+  // Kho bài Threads EPIX: 34 bài (hôm qua 12, hôm nay 22), hôm qua đăng 12, hôm nay đăng 5
+  const loai = ['meo', 'do-cau', 'tu-vung', 'hoi', 'web']
+  const threads_kho_bai = Array.from({ length: 34 }, (_, i) => {
+    const ng = i < 12 ? addDays(today, -1) : today, stt = i < 12 ? i + 1 : i - 11
+    const ma = `C-${ng.replace(/-/g, '')}-${String(stt).padStart(2, '0')}`
+    return { ma, ngay_goi_y: ng, stt, loai: loai[i % 5], chu: `Mẹo TOEIC Part ${(i % 7) + 1}: đọc câu hỏi trước khi nghe, gạch từ khoá rồi mới chọn đáp án.\n\nBạn hay sai ở part nào nhất?`, binh_luan_dau: i % 3 ? null : 'Đề luyện miễn phí ở web EPIX, link trong bio nha', anh: ma + '.png' }
+  })
+  const threads_kho_dang = [...threads_kho_bai.slice(0, 10), ...threads_kho_bai.slice(10, 15)].map((b, i) => ({ ma: b.ma, member_id: staff[1].id, luc: new Date(Date.now() - (i < 10 ? 864e5 : 0) - i * 6e5).toISOString(), link: i % 2 ? null : 'https://www.threads.com/@demo/post/' + i }))
+  return { threads_kho_bai, threads_kho_dang, work_schedules, affiliate_codes, affiliate_orders, affiliate_payouts, market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
 }
 
 const db = seed()
@@ -151,14 +159,14 @@ class Query {
   maybeSingle() { this._one = true; return this }
   then(res, rej) { return Promise.resolve().then(() => this.run()).then(res, rej) }
   run() {
-    const rows = db[this.t]
+    const rows = db[this.t] || (db[this.t] = [])
     const match = (r) => this.filters.every((f) => f(r))
     let out
     if (this.op === 'select') {
       out = rows.filter(match)
       for (const [c, asc] of [...this.orders].reverse()) out = [...out].sort((a, b) => ((a[c] ?? '') > (b[c] ?? '') ? 1 : (a[c] ?? '') < (b[c] ?? '') ? -1 : 0) * (asc ? 1 : -1))
     } else if (this.op === 'insert') {
-      out = [].concat(this.payload).map((p) => ({ id: uid(), created_at: new Date().toISOString(), ...p }))
+      out = [].concat(this.payload).map((p) => ({ id: uid(), created_at: new Date().toISOString(), ...(this.t === 'threads_kho_dang' ? { luc: new Date().toISOString() } : {}), ...p }))
       rows.push(...out)
     } else if (this.op === 'update') {
       out = rows.filter(match)
@@ -182,8 +190,13 @@ class Query {
 }
 function me() { return db.members.find((m) => m.login_email === session?.user.email) }
 
+const demoImg = (p) => 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500"><rect width="400" height="500" fill="#ffe3d6"/><text x="200" y="250" font-size="26" text-anchor="middle" fill="#a23">${p}</text></svg>`)
 export const demoClient = {
   from: (t) => new Query(t),
+  storage: { from: () => ({
+    async createSignedUrls(ps) { return { data: ps.map((p) => ({ path: p, signedUrl: demoImg(p) })), error: null } },
+    async createSignedUrl(p) { return { data: { signedUrl: demoImg(p) }, error: null } },
+  }) },
   async rpc(fn, { p_idea } = {}) {
     const idea = db.seed_ideas.find((i) => i.id === p_idea)
     const m = me()

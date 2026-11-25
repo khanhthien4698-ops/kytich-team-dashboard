@@ -149,7 +149,7 @@ function Shell({ me }) {
         {tab === 'today' && (!isAdmin || viewId) && <Today me={me} hasNav viewId={viewId} onView={(id) => { setViewId(id); scrollTo({ top: 0 }) }} />}
         {tab === 'board' && <Board me={me} onOpen={openMember} />}
         {tab === 'effect' && isAdmin && <Effect />}
-        {tab === 'threads' && <Threads />}
+        {tab === 'threads' && <Threads me={me} />}
         {tab === 'settings' && isAdmin && <Settings me={me} />}
       </main>
 

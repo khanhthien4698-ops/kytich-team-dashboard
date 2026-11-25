@@ -874,3 +874,22 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
   .cal-p { font-size: 12px; }
   .cal-s { display: none; }
 }
+
+/* Kho bài Threads EPIX (25/11) */
+.kho-kpi { font-size: 15px; display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.kho-kpi b { font-size: 30px; font-weight: 900; color: var(--red); }
+.kho-low { margin: 10px 0 0; font-size: 13.5px; }
+.kho-item { display: flex; gap: 14px; align-items: flex-start; }
+.kho-img { width: 150px; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); flex: none; display: block; }
+.kho-img.ph { background: var(--line-2); }
+.kho-img.sm { width: 64px; }
+.kho-body { flex: 1; min-width: 0; }
+.kho-chu { max-height: 260px; overflow-y: auto; }
+.kho-act, .kho-done { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.kho-done .input { flex: 1; min-width: 180px; }
+@media (max-width: 640px) {
+  .kho-item { flex-direction: column; }
+  .kho-img { width: 100%; max-width: 320px; }
+  .kho-img.sm { width: 64px; }
+  .kho-done .btn { flex: 1; }
+}

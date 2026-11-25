@@ -824,3 +824,53 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
 .th-h { font-size: 14.5px; margin: 16px 0 8px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 @media (min-width: 900px) { .th-kpis { grid-template-columns: repeat(6, 1fr); } }
 .th-kpis { margin-top: 0; }
+
+/* ---- Tiến độ theo ngày: lọc ngày, bảng %, lịch từng người (25/11) ---- */
+.prog-filter { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 4px 0 14px; }
+.prog-filter label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.prog-filter input[type=date] { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: inherit; }
+.prog .seg.inline { border-bottom: none; gap: 4px; background: var(--cream); padding: 3px; border-radius: 999px; }
+.prog .seg.inline button { padding: 6px 12px; border: none; margin: 0; border-radius: 999px; font-size: 13px; }
+.prog .seg.inline button.on { background: var(--card); color: var(--red); box-shadow: 0 1px 4px rgba(77, 13, 13, .1); }
+.prog-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.prog-tbl { border-collapse: separate; border-spacing: 3px; font-size: 13px; min-width: 100%; }
+.prog-tbl th { font-weight: 600; color: var(--muted); font-size: 12px; white-space: nowrap; text-align: center; padding: 2px 4px; }
+.prog-tbl thead th span { display: block; font-size: 11px; font-weight: 500; }
+.prog-tbl thead th.today { color: var(--red); }
+.prog-tbl th.who { text-align: left; position: sticky; left: 0; background: var(--card); z-index: 1; padding-right: 10px; }
+.prog-tbl .linkbtn { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--ink, var(--brown)); cursor: pointer; text-align: left; }
+.prog-tbl .linkbtn:hover { color: var(--red); }
+.prog-tbl td.pc { padding: 0; }
+.prog-tbl td.pc button { width: 100%; min-width: 46px; height: 32px; border: none; border-radius: 6px; font: inherit; font-weight: 700; font-size: 12px; cursor: pointer; }
+.prog-tbl td.pc.g button { background: var(--green-soft); color: var(--green); }
+.prog-tbl td.pc.y button { background: var(--yellow-soft); color: #9a6700; }
+.prog-tbl td.pc.r button { background: var(--red-soft); color: var(--red); }
+.prog-tbl td.pc.n button { background: var(--line-2, var(--cream)); cursor: default; }
+.prog-tbl td.pc.sel button { outline: 2px solid var(--brown); outline-offset: 1px; }
+.prog-tbl td.sum { text-align: center; white-space: nowrap; padding: 0 6px; }
+.cal-wrap { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.cal-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.cal-nav { display: flex; align-items: center; gap: 8px; }
+.cal-sum { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin: 12px 0 8px; color: var(--ink-2, var(--muted)); }
+.cal-leg { display: inline-flex; align-items: center; gap: 4px; }
+.cal-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-left: 6px; }
+.cal-leg i.g { background: var(--green); } .cal-leg i.y { background: var(--yellow); } .cal-leg i.r { background: var(--red); }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal-wd { text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); }
+.cal-d { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-height: 78px; padding: 6px 7px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font: inherit; text-align: left; cursor: pointer; }
+.cal-d:disabled { cursor: default; background: var(--line-2, var(--cream)); opacity: .6; }
+.cal-d.g { border-color: var(--green); background: var(--green-soft); }
+.cal-d.y { border-color: var(--yellow); background: var(--yellow-soft); }
+.cal-d.r { border-color: var(--red-soft); background: var(--red-soft); }
+.cal-d.today { box-shadow: 0 0 0 2px var(--red) inset; }
+.cal-d.sel { outline: 2px solid var(--brown); outline-offset: 1px; }
+.cal-n { font-size: 12px; font-weight: 600; color: var(--muted); }
+.cal-p { font-size: 16px; font-weight: 800; }
+.cal-d .bar { margin: 2px 0; height: 6px; background: rgba(255, 255, 255, .7); }
+.cal-s { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 560px) {
+  .cal { gap: 3px; }
+  .cal-d { min-height: 56px; padding: 4px; }
+  .cal-p { font-size: 12px; }
+  .cal-s { display: none; }
+}

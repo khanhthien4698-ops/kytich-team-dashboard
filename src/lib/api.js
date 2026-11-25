@@ -87,6 +87,20 @@ export async function getRange(from, to) {
   const [checks, extras, posts, notes] = await Promise.all([r('daily_checks'), r('extra_tasks'), r('seeding_posts'), r('day_notes')])
   return { checks, extras, posts, notes }
 }
+// Tiến độ theo ngày (Cả đội): việc, bài seeding, bài cần trả lời còn mở, comment Threads được giao + đã tích
+export async function getProgressRange(from, to, groups, targetFrom) {
+  const [base, reviews] = await Promise.all([getRange(from, to), listReviewsSince(from)])
+  const open = (await q(sb.from('seed_targets').select('date,status,assigned_to,taken_by,group_name').in('status', ['new', 'taken']).gte('date', targetFrom)))
+    .filter((t) => groups.includes(t.group_name))
+  const th = {}, thDone = []
+  try {
+    const { data } = await sb.from('threads_reports').select('ngay,seeding:data->seeding,bai:data->bai').gte('ngay', from).lte('ngay', to)
+    for (const r of data || []) th[r.ngay] = [...(r.seeding || []), ...(r.bai || []).filter((x) => x.nv && x.link)].map((x) => ({ link: x.link, giao: x.giao }))
+    const r = await sb.from('threads_seed_done').select('ngay,link').gte('ngay', from).lte('ngay', to)
+    if (!r.error) thDone.push(...r.data)
+  } catch { /* chưa có bảng Threads thì bỏ qua */ }
+  return { ...base, reviews, open, th, thDone }
+}
 export const listIdeasRange = (from, to) => q(sb.from('seed_ideas').select('*').gte('date', from).lte('date', to))
 export const listReports = (from, to) =>
   q(sb.from('team_reports').select('*').gte('date', from).lte('date', to).order('date', { ascending: false }))

@@ -7,6 +7,7 @@ import Review, { isBad } from '../components/Review.jsx'
 import { initials, greet, shortName } from '../components/ui.jsx'
 import Affiliate from '../components/Affiliate.jsx'
 import { TeamSchedule } from '../components/Schedule.jsx'
+import Progress from '../components/Progress.jsx'
 
 // Số liệu 1 người trong 1 ngày. Màu: xanh = đủ việc + bài + comment; đỏ = không làm gì; vàng = có làm nhưng thiếu
 function dayStat(m, date, data, routines, today) {
@@ -160,6 +161,8 @@ export default function Board({ me, onOpen }) {
         })}
       </div>
       {sel && <Detail m={sel.m} d={sel.d} data={data} routines={routines} onClose={() => setSel(null)} />}
+
+      <Progress members={members} routines={routines} Detail={Detail} />
 
       {isAdmin && (
         <section className="card">

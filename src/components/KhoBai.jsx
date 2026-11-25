@@ -19,11 +19,15 @@ const vnDate = (ts) => !ts ? vnToday() : new Intl.DateTimeFormat('en-CA', { time
 export const KPI_THREADS = 15
 export function threadsLink(raw) {
   // Nhận cả khi dán kèm chữ khác, link có đuôi ?xmt=..., /media, chữ hoa ở tên miền
-  const m = String(raw || '').trim().match(/threads\.(?:com|net)\/@([A-Za-z0-9._]{1,40})\/post\/([A-Za-z0-9_-]{5,40})(?![A-Za-z0-9_-])/i)
-  return m ? `https://www.threads.com/@${m[1]}/post/${m[2]}` : null
+  const t = String(raw || '').trim()
+  const m = t.match(/threads\.(?:com|net)\/@([A-Za-z0-9._]{1,40})\/post\/([A-Za-z0-9_-]{5,40})(?![A-Za-z0-9_-])/i)
+  if (m) return `https://www.threads.com/@${m[1]}/post/${m[2]}`
+  // Threads bản máy tính "Sao chép liên kết" ra dạng /share/MÃ (thêm 25/11, SQL 018)
+  const s = t.match(/threads\.(?:com|net)\/share\/([A-Za-z0-9_-]{5,40})(?![A-Za-z0-9_-])/i)
+  return s ? `https://www.threads.com/share/${s[1]}` : null
 }
-const codeOf = (link) => (link || '').match(/\/post\/([A-Za-z0-9_-]+)$/)?.[1] || null
-const LINK_SAI = 'Link chưa đúng. Trên Threads bấm Chia sẻ, chọn Sao chép liên kết rồi dán lại (dạng threads.com/@nick/post/...)'
+const codeOf = (link) => { const m = (link || '').match(/\/(post|share)\/([A-Za-z0-9_-]+)$/); return m ? m[1] + ':' + m[2] : null }
+const LINK_SAI = 'Link chưa đúng. Trên Threads bấm dấu ba chấm của bài, chọn Sao chép liên kết rồi dán lại'
 
 export default function KhoBai({ me }) {
   const notify = useToast()
@@ -81,7 +85,7 @@ export default function KhoBai({ me }) {
   }
   // Cùng 1 bài Threads không được ghi cho 2 bài trong kho
   const dupOf = (link, ma) => dang.find((p) => p.ma !== ma && codeOf(p.link) && codeOf(p.link) === codeOf(link))
-  const dupMsg = (error) => /ma_bai_threads/i.test(error.message) ? 'Link này đã ghi cho bài khác trong kho' : /duplicate|unique/i.test(error.message) ? 'Bài này đã có người bấm đăng rồi' : /link_dang|check constraint/i.test(error.message) ? LINK_SAI : error.message
+  const dupMsg = (error) => /ma_bai_threads|ma_share_threads/i.test(error.message) ? 'Link này đã ghi cho bài khác trong kho' : /duplicate|unique/i.test(error.message) ? 'Bài này đã có người bấm đăng rồi' : /link_dang|check constraint/i.test(error.message) ? LINK_SAI : error.message
   const markDone = async (x) => {
     const link = threadsLink(links[x.ma])
     if (!link) return notify(LINK_SAI, true)

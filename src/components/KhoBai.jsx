@@ -152,7 +152,7 @@ export default function KhoBai({ me }) {
             <li>Bài đố câu: 2-3 tiếng sau mới đăng bình luận đáp án.</li>
             <li>Ai comment thì trả lời bằng lời của Châu. Hỏi về EPIX mà không chắc thì hỏi Thiện, đừng đoán.</li>
             <li>Không dùng nick phụ hay nhờ nick ảo vào thích, comment bài của mình.</li>
-            <li>Được sửa chữ cho hợp giọng Châu, nhưng giữ câu "mình làm ở EPIX TOEIC" ở bài giới thiệu web. Không thêm chuyện chưa xảy ra (điểm thi, đã đậu...).</li>
+            <li>Được sửa chữ cho hợp giọng Châu, nhưng giữ đoạn nói Châu làm ở EPIX trong bài. Không thêm chuyện chưa xảy ra (điểm thi, đã đậu...).</li>
             <li>Thấy Threads cảnh báo, hạn chế nick hoặc lượt xem tụt hẳn thì dừng và báo Thiện.</li>
           </ol>
         </details>

@@ -10,8 +10,9 @@ import { useToast } from '../App.jsx'
 const KPI = KPI_THREADS
 const LOW = 30
 const PAGE = 10
+const SHOW_MAX = 50 // bảng luôn đầy tối đa 50 bài, đăng hoặc bỏ qua thì bài trong kho dự trữ tự lên thay (Thiện 25/11)
 const BUCKET = 'threads-kho'
-const LOAI = { meo: 'Mẹo', 'do-cau': 'Đố câu', 'tu-vung': 'Từ vựng', hoi: 'Hỏi', web: 'Giới thiệu web' }
+const LOAI = { meo: 'Mẹo', 'do-cau': 'Đố câu', 'tu-vung': 'Từ vựng', hoi: 'Hỏi', web: 'Giới thiệu web', 'hoi-dap': 'Hỏi', 'nhat-ky': 'Nhật ký', 'luyen-part': 'Luyện Part', 'chuan-dau-ra': 'Chuẩn đầu ra' }
 const vnDate = (ts) => !ts ? vnToday() : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(ts))
 // Link bài Threads bắt buộc (Thiện chốt 25/11): threads.com hoặc threads.net, dạng /@nick/post/MÃ.
 // Bỏ phần sau dấu ? và #, đưa về một dạng chuẩn để so trùng (cùng MÃ = cùng bài).
@@ -38,8 +39,8 @@ export default function KhoBai({ me }) {
 
   const load = useCallback(async () => {
     const [b, d, m] = await Promise.all([
-      sb.from('threads_kho_bai').select('ma,ngay_goi_y,stt,loai,chu,binh_luan_dau,anh').order('ma'),
-      sb.from('threads_kho_dang').select('ma,member_id,luc,link'),
+      sb.from('threads_kho_bai').select('ma,ngay_goi_y,stt,loai,chu,binh_luan_dau,anh').order('ma').limit(2000),
+      sb.from('threads_kho_dang').select('ma,member_id,luc,link').limit(5000),
       sb.from('members').select('id,name'),
     ])
     if (b.error) {
@@ -54,9 +55,12 @@ export default function KhoBai({ me }) {
 
   const byMa = useMemo(() => Object.fromEntries(dang.map((x) => [x.ma, x])), [dang])
   const queue = useMemo(() => (bai || []).filter((x) => !byMa[x.ma]), [bai, byMa])
-  const posted = useMemo(() => dang.filter((x) => vnDate(x.luc) === date).sort((a, b) => a.luc.localeCompare(b.luc)), [dang, date])
+  // Dòng không có link = bài đã bấm "Bỏ qua" (từ 25/11 "Đã đăng" luôn bắt buộc link)
+  const posted = useMemo(() => dang.filter((x) => x.link && vnDate(x.luc) === date).sort((a, b) => a.luc.localeCompare(b.luc)), [dang, date])
+  const skipped = useMemo(() => dang.filter((x) => !x.link && vnDate(x.luc) === date).sort((a, b) => b.luc.localeCompare(a.luc)), [dang, date])
   const baiOf = useMemo(() => Object.fromEntries((bai || []).map((x) => [x.ma, x])), [bai])
-  const shown = queue.slice(0, show)
+  const board = queue.slice(0, SHOW_MAX)
+  const shown = board.slice(0, show)
 
   // Link ký tạm cho ảnh đang hiện (hàng chờ + đã đăng ngày đang xem)
   useEffect(() => {
@@ -90,12 +94,20 @@ export default function KhoBai({ me }) {
     if (date !== today) setDate(today)
     notify('Đã ghi đăng bài ' + x.ma); load()
   }
+  const skip = async (x) => {
+    setBusy(x.ma)
+    const { error } = await sb.from('threads_kho_dang').insert({ ma: x.ma, member_id: me.id })
+    setBusy(null)
+    if (error) return notify(dupMsg(error), true)
+    if (date !== today) setDate(today)
+    notify('Đã bỏ bài ' + x.ma + ' khỏi bảng'); load()
+  }
   const undo = async (p) => {
     setBusy(p.ma)
     const { error } = await sb.from('threads_kho_dang').delete().eq('ma', p.ma)
     setBusy(null)
     if (error) return notify(error.message, true)
-    notify('Đã bỏ tích, bài về lại hàng chờ'); load()
+    notify('Bài đã về lại hàng chờ'); load()
   }
   const saveLink = async (p) => {
     const link = threadsLink(links[p.ma] ?? p.link)
@@ -111,7 +123,7 @@ export default function KhoBai({ me }) {
 
   const head = (
     <div className="card-h">
-      <h2>Kho bài EPIX</h2><span className="count">{bai ? `${queue.length} bài chờ đăng` : ''}</span>
+      <h2>Kho bài EPIX</h2><span className="count">{bai ? `${Math.min(queue.length, SHOW_MAX)} bài trên bảng · kho còn ${Math.max(0, queue.length - SHOW_MAX)} bài dự trữ` : ''}</span>
     </div>
   )
   if (bai === undefined) return <section className="card">{head}<p className="empty">Đang tải...</p></section>
@@ -149,10 +161,11 @@ export default function KhoBai({ me }) {
             <li>Trước bài đầu tiên, thêm vào phần giới thiệu của hồ sơ: <b>Làm ở EPIX TOEIC</b>.</li>
             <li>Mỗi bài: chép chữ, tải đúng ảnh đi kèm rồi đăng. Đăng xong, dán link bài Threads vào ô bên dưới bài rồi bấm "Đã đăng". Phải có link thì bài mới được tính vào chỉ tiêu.</li>
             <li>Đăng rải từ sáng tới tối, mỗi bài cách nhau khoảng 45-60 phút. Đừng đăng dồn.</li>
-            <li>Bài đố câu: 2-3 tiếng sau mới đăng bình luận đáp án.</li>
+            <li>Bài có "Bình luận đầu": đăng bài xong thì tự bình luận câu đó ngay, kèm ảnh bình luận (nút "Tải ảnh bình luận").</li>
+            <li>Bài nào thấy không ổn thì bấm "Bỏ qua", bài đó rời bảng và bài khác trong kho tự lên thay.</li>
             <li>Ai comment thì trả lời bằng lời của Châu. Hỏi về EPIX mà không chắc thì hỏi Thiện, đừng đoán.</li>
             <li>Không dùng nick phụ hay nhờ nick ảo vào thích, comment bài của mình.</li>
-            <li>Được sửa chữ cho hợp giọng Châu, nhưng giữ đoạn nói Châu làm ở EPIX trong bài. Không thêm chuyện chưa xảy ra (điểm thi, đã đậu...).</li>
+            <li>Được sửa chữ cho hợp giọng Châu. Không thêm chuyện chưa xảy ra (điểm thi, đã đậu...).</li>
             <li>Thấy Threads cảnh báo, hạn chế nick hoặc lượt xem tụt hẳn thì dừng và báo Thiện.</li>
           </ol>
         </details>
@@ -172,11 +185,13 @@ export default function KhoBai({ me }) {
                   {x.ngay_goi_y && x.ngay_goi_y < today && <span className="chip warn">Tồn từ {x.ngay_goi_y.slice(8)}/{x.ngay_goi_y.slice(5, 7)}</span>}
                 </div>
                 <div className="th-text open kho-chu">{x.chu}</div>
-                {x.binh_luan_dau && <div className="th-reply"><b>Đáp án (bình luận sau 2-3 tiếng):</b> {x.binh_luan_dau}</div>}
+                {x.binh_luan_dau && <div className="th-reply"><b>{x.loai === 'do-cau' ? 'Đáp án (bình luận sau 2-3 tiếng):' : 'Bình luận đầu (tự bình luận ngay sau khi đăng):'}</b> {x.binh_luan_dau}</div>}
                 <div className="kho-act">
                   <button className="btn ghost sm" onClick={() => copy(x.chu, 'bài')}>Chép bài</button>
                   {x.anh && <button className="btn ghost sm" onClick={() => download(x)}>Tải ảnh</button>}
-                  {x.binh_luan_dau && <button className="btn ghost sm" onClick={() => copy(x.binh_luan_dau, 'đáp án')}>Chép đáp án</button>}
+                  {x.binh_luan_dau && <button className="btn ghost sm" onClick={() => copy(x.binh_luan_dau, x.loai === 'do-cau' ? 'đáp án' : 'bình luận')}>{x.loai === 'do-cau' ? 'Chép đáp án' : 'Chép bình luận'}</button>}
+                  {x.binh_luan_dau && x.ma.startsWith('M-') && <button className="btn ghost sm" onClick={() => download({ anh: x.ma + '-bl.jpg' })}>Tải ảnh bình luận</button>}
+                  <button className="btn ghost sm" style={{ marginLeft: 'auto' }} disabled={busy === x.ma} onClick={() => skip(x)}>Bỏ qua</button>
                 </div>
                 <div className="kho-done">
                   <input className="input" placeholder="Dán link bài Threads vừa đăng (bắt buộc)" value={links[x.ma] || ''} onChange={(e) => setLinks((l) => ({ ...l, [x.ma]: e.target.value }))} />
@@ -186,7 +201,18 @@ export default function KhoBai({ me }) {
             </div>
           ))}
         </div>
-        {queue.length > show && <button className="btn ghost block" style={{ marginTop: 12 }} onClick={() => setShow(show + PAGE)}>Xem thêm {Math.min(PAGE, queue.length - show)} bài</button>}
+        {board.length > show && <button className="btn ghost block" style={{ marginTop: 12 }} onClick={() => setShow(show + PAGE)}>Xem thêm {Math.min(PAGE, board.length - show)} bài</button>}
+        {skipped.length > 0 && (
+          <details className="kho-hd" style={{ marginTop: 12 }}>
+            <summary>Đã bỏ qua {date === today ? 'hôm nay' : 'ngày này'}: {skipped.length} bài</summary>
+            {skipped.map((p) => (
+              <div key={p.ma} className="kho-done">
+                <span className="mini" style={{ flex: 1 }}>{p.ma} · {(baiOf[p.ma]?.chu || '').slice(0, 80)}</span>
+                {canEdit(p) && <button className="btn ghost sm" disabled={busy === p.ma} onClick={() => undo(p)}>Lấy lại</button>}
+              </div>
+            ))}
+          </details>
+        )}
       </section>
 
       <section className="card">

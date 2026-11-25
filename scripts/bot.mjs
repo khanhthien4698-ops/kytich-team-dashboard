@@ -203,6 +203,13 @@ async function main() {
         anh = `${x.ma}.${ext}`
         imgs.push({ abs, anh, ext, size: statSync(abs).size })
       }
+      if (x.anh_bl) {
+        // Ảnh của bình luận đầu: lưu tên cố định <mã>-bl.jpg, giao diện tự tìm (không cần cột mới)
+        const rel = String(x.anh_bl)
+        const abs = join(base, rel)
+        if (!/\.jpe?g$/i.test(rel) || rel.includes('..') || rel.startsWith('/') || !existsSync(abs)) { bad.push(where + ': ảnh bình luận sai'); continue }
+        imgs.push({ abs, anh: `${x.ma}-bl.jpg`, ext: 'jpg', size: statSync(abs).size })
+      }
       rows.push({ ma: x.ma, ngay_goi_y: x.ngay_goi_y || null, stt: Number.isInteger(x.stt) ? x.stt : null, loai: x.loai || null,
         chu: String(x.chu).trim(), binh_luan_dau: x.binh_luan_dau ? String(x.binh_luan_dau).trim() : null, anh, cap_nhat: new Date().toISOString() })
     }
@@ -230,6 +237,19 @@ async function main() {
     const all = await q(sb.from('threads_kho_bai').select('ma'))
     const left = all.filter((x) => !done.has(x.ma)).length
     console.log(`OK: ${rows.length} bài (thêm mới hoặc cập nhật), tải ${up} ảnh mới. Hàng chờ còn ${left} bài${left < 30 ? ' (dưới 30, nên nạp thêm)' : ''}.`)
+    return
+  }
+
+  if (cmd === 'threads-kho-bo') {
+    // Cho bài rời bảng đăng (giống nút "Bỏ qua"), không xoá bài; lấy lại được trên web. --prefix C- hoặc M-
+    const prefix = String(a.prefix || '')
+    if (!/^[A-Za-z0-9_-]{2,}$/.test(prefix)) die('Cần --prefix, ví dụ C-')
+    const all = await q(sb.from('threads_kho_bai').select('ma').like('ma', prefix + '%'))
+    const done = new Set((await q(sb.from('threads_kho_dang').select('ma'))).map((x) => x.ma))
+    const rows = all.filter((x) => !done.has(x.ma)).map((x) => ({ ma: x.ma, member_id: me.id }))
+    if (a.dry || !rows.length) return console.log(`${a.dry ? 'Thử: ' : ''}${rows.length} bài sẽ rời bảng. Đã đăng/bỏ từ trước: ${all.length - rows.length}.`)
+    await q(sb.from('threads_kho_dang').insert(rows))
+    console.log(`OK: ${rows.length} bài đã rời bảng.`)
     return
   }
 

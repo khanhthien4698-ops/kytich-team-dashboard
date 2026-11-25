@@ -9,6 +9,7 @@ import Affiliate from '../components/Affiliate.jsx'
 import { TeamSchedule } from '../components/Schedule.jsx'
 import Progress from '../components/Progress.jsx'
 import { threadsLink, KPI_THREADS } from '../components/KhoBai.jsx'
+import KpiEpix from '../components/KpiEpix.jsx'
 
 // Số liệu 1 người trong 1 ngày. Màu: xanh = đủ việc + bài + comment; đỏ = không làm gì; vàng = có làm nhưng thiếu
 function dayStat(m, date, data, routines, today) {
@@ -133,6 +134,8 @@ export default function Board({ me, onOpen }) {
           </div>
         </div>
       </section>
+
+      <KpiEpix me={me} />
 
       {members.length === 0 && <p className="empty">Chưa có nhân viên. Thiện thêm ở Cài đặt.</p>}
       <div className="people2">

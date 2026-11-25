@@ -131,7 +131,10 @@ function seed() {
     return { ma, ngay_goi_y: ng, stt, loai: loai[i % 5], chu: `Mẹo TOEIC Part ${(i % 7) + 1}: đọc câu hỏi trước khi nghe, gạch từ khoá rồi mới chọn đáp án.\n\nBạn hay sai ở part nào nhất?`, binh_luan_dau: i % 3 ? null : 'Đề luyện miễn phí ở web EPIX, link trong bio nha', anh: ma + '.png' }
   })
   const threads_kho_dang = [...threads_kho_bai.slice(0, 10), ...threads_kho_bai.slice(10, 15)].map((b, i) => ({ ma: b.ma, member_id: staff[1].id, luc: new Date(Date.now() - (i < 10 ? 864e5 : 0) - i * 6e5).toISOString(), link: i % 2 ? null : 'https://www.threads.com/@demo/post/DEMO' + i + 'xyz' }))
-  return { threads_kho_bai, threads_kho_dang, work_schedules, affiliate_codes, affiliate_orders, affiliate_payouts, market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
+  // KPI EPIX: số web từ 3 ngày trước, group Zalo/FB nhập 2 ngày
+  const epix_kpi_ngay = [-3, -2, -1, 0].map((k, i) => ({ d: addDays(today, k), truy_cap: [1450, 1720, 2010, 860][i], user_moi: [210, 260, 305, 120][i], cap_nhat: new Date().toISOString() }))
+  const epix_group_ngay = [[-1, 'zalo', 412], [-1, 'fb', 530], [0, 'zalo', 431]].map(([k, kenh, so_tv]) => ({ d: addDays(today, k), kenh, so_tv, member_id: null, luc: new Date().toISOString() }))
+  return { epix_kpi_ngay, epix_group_ngay, threads_kho_bai, threads_kho_dang, work_schedules, affiliate_codes, affiliate_orders, affiliate_payouts, market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
 }
 
 const db = seed()

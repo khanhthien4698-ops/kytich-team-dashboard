@@ -30,6 +30,7 @@
 //   node scripts/bot.mjs tien-do [--chot]  # in tin tiến độ seeding hôm nay của từng người (cho Telegram 10h/16h/21h); --chot thêm dòng chốt ngày
 //   node scripts/bot.mjs threads-day [--date YYYY-MM-DD] [--dir PATH]  # đẩy báo cáo đăng Threads (file bao-cao/<ngày>.json) lên mục Threads; mặc định hôm nay + hôm qua, file không đổi thì bỏ qua; xoá bình luận người xem ở các ngày cũ hơn 7 ngày
 //   node scripts/bot.mjs threads-kho [--file PATH] [--dry]  # nạp kho bài Threads EPIX (kho-bai.json + thư mục ảnh cạnh nó) lên tab Threads; upsert theo "ma", chạy lại an toàn, không đụng trạng thái "đã đăng"; ảnh đã có cùng dung lượng thì bỏ qua
+//   node scripts/bot.mjs epix-kpi --json '[{"d":"2026-11-26","truy_cap":187,"user_moi":5}]'  # ghi số web EPIX theo ngày (khối KPI EPIX ở Cả đội); upsert theo ngày, chạy lại an toàn
 //   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
 //   Mọi lượt dùng chung Facebook nên không chạy chồng nhau. scan in "GO since=<ISO>" = lần đọc group gần nhất.
@@ -145,7 +146,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 37).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 38).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -237,6 +238,23 @@ async function main() {
     const all = await q(sb.from('threads_kho_bai').select('ma'))
     const left = all.filter((x) => !done.has(x.ma)).length
     console.log(`OK: ${rows.length} bài (thêm mới hoặc cập nhật), tải ${up} ảnh mới. Hàng chờ còn ${left} bài${left < 30 ? ' (dưới 30, nên nạp thêm)' : ''}.`)
+    return
+  }
+
+  if (cmd === 'epix-kpi') {
+    // Số web EPIX theo ngày: lịch tự động đọc Lovable analytics (visitors) + profiles DB EPIX rồi gọi lệnh này
+    let rows
+    try { rows = JSON.parse(a.file ? readFileSync(a.file, 'utf8') : String(a.json || '')) } catch { die('Cần --json hoặc --file là mảng JSON [{d, truy_cap, user_moi}]') }
+    if (!Array.isArray(rows) || !rows.length) die('Mảng rỗng')
+    const n = (v) => (Number.isInteger(Number(v)) && Number(v) >= 0 && v !== '' && v != null ? Number(v) : die('Số không hợp lệ: ' + v))
+    const list = rows.map((r) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.d))) die('Ngày không hợp lệ: ' + r.d)
+      return { d: r.d, truy_cap: n(r.truy_cap), user_moi: n(r.user_moi), cap_nhat: new Date().toISOString() }
+    })
+    if (new Set(list.map((r) => r.d)).size !== list.length) die('Có ngày bị trùng trong mảng')
+    await q(sb.from('epix_kpi_ngay').upsert(list, { onConflict: 'd' }))
+    const all = await q(sb.from('epix_kpi_ngay').select('d,truy_cap,user_moi').order('d'))
+    console.log(`OK: ghi ${list.length} ngày. Bảng có ${all.length} ngày, mới nhất ${all.at(-1)?.d}.`)
     return
   }
 

@@ -898,3 +898,25 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
 .kho-hd ol { padding-left: 22px; }
 .pnums .pnum.th { grid-column: 1 / -1; }
 .pnums .pnum.th.full .v { color: var(--ok-ink); }
+
+/* KPI EPIX trên Cả đội (25/11) */
+.epx-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.epx-item { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-width: 0; }
+.epx-item .lbl { font-size: 12px; color: var(--muted); font-weight: 600; }
+.epx-item .v { font-size: 22px; font-weight: 700; margin-top: 2px; }
+.epx-item .v small { font-size: 13px; color: var(--muted); font-weight: 500; }
+.epx-item .bar { height: 8px; margin: 8px 0 6px; }
+.epx-item .sub { font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.epx-item .mini { margin-top: 4px; }
+.epx-note { margin: 10px 0 0; }
+.epx-form { margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--cream); }
+.epx-fields { display: grid; grid-template-columns: 1.1fr 1fr 1fr auto; gap: 10px; align-items: end; margin-top: 8px; }
+.epx-fields label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; min-width: 0; }
+.epx-tbl { overflow-x: auto; margin-top: 8px; }
+.epx-tbl table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.epx-tbl th, .epx-tbl td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.epx-tbl .n { text-align: right; }
+.epx-tbl tr.now td { background: var(--orange-soft); font-weight: 700; }
+.epx-tbl tr.future td { color: var(--muted); }
+.epx-tbl tfoot td { font-weight: 700; border-bottom: none; }
+@media (max-width: 860px) { .epx-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .epx-fields { grid-template-columns: 1fr 1fr; } .epx-fields .btn { grid-column: 1 / -1; } }

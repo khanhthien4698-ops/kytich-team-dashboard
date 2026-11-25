@@ -18,11 +18,12 @@ const vnDate = (ts) => !ts ? vnToday() : new Intl.DateTimeFormat('en-CA', { time
 // Bỏ phần sau dấu ? và #, đưa về một dạng chuẩn để so trùng (cùng MÃ = cùng bài).
 export const KPI_THREADS = 15
 export function threadsLink(raw) {
-  const m = String(raw || '').trim().match(/^(?:https?:\/\/)?(?:www\.)?threads\.(?:com|net)\/@([A-Za-z0-9._]{1,40})\/post\/([A-Za-z0-9_-]{5,40})\/?(?:[?#].*)?$/)
+  // Nhận cả khi dán kèm chữ khác, link có đuôi ?xmt=..., /media, chữ hoa ở tên miền
+  const m = String(raw || '').trim().match(/threads\.(?:com|net)\/@([A-Za-z0-9._]{1,40})\/post\/([A-Za-z0-9_-]{5,40})(?![A-Za-z0-9_-])/i)
   return m ? `https://www.threads.com/@${m[1]}/post/${m[2]}` : null
 }
 const codeOf = (link) => (link || '').match(/\/post\/([A-Za-z0-9_-]+)$/)?.[1] || null
-const LINK_SAI = 'Link phải là bài Threads, dạng threads.com/@nick/post/...'
+const LINK_SAI = 'Link chưa đúng. Trên Threads bấm Chia sẻ, chọn Sao chép liên kết rồi dán lại (dạng threads.com/@nick/post/...)'
 
 export default function KhoBai({ me }) {
   const notify = useToast()
@@ -195,7 +196,7 @@ export default function KhoBai({ me }) {
                 </div>
                 <div className="kho-done">
                   <input className="input" placeholder="Dán link bài Threads vừa đăng (bắt buộc)" value={links[x.ma] || ''} onChange={(e) => setLinks((l) => ({ ...l, [x.ma]: e.target.value }))} />
-                  <button className="btn sm" disabled={busy === x.ma || !threadsLink(links[x.ma])} title={threadsLink(links[x.ma]) ? '' : 'Dán link bài Threads trước'} onClick={() => markDone(x)}>Đã đăng</button>
+                  <button className="btn sm" disabled={busy === x.ma} onClick={() => markDone(x)}>Đã đăng</button>
                 </div>
               </div>
             </div>

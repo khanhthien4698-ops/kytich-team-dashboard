@@ -130,7 +130,7 @@ function seed() {
     const ma = `C-${ng.replace(/-/g, '')}-${String(stt).padStart(2, '0')}`
     return { ma, ngay_goi_y: ng, stt, loai: loai[i % 5], chu: `Mẹo TOEIC Part ${(i % 7) + 1}: đọc câu hỏi trước khi nghe, gạch từ khoá rồi mới chọn đáp án.\n\nBạn hay sai ở part nào nhất?`, binh_luan_dau: i % 3 ? null : 'Đề luyện miễn phí ở web EPIX, link trong bio nha', anh: ma + '.png' }
   })
-  const threads_kho_dang = [...threads_kho_bai.slice(0, 10), ...threads_kho_bai.slice(10, 15)].map((b, i) => ({ ma: b.ma, member_id: staff[1].id, luc: new Date(Date.now() - (i < 10 ? 864e5 : 0) - i * 6e5).toISOString(), link: i % 2 ? null : 'https://www.threads.com/@demo/post/' + i }))
+  const threads_kho_dang = [...threads_kho_bai.slice(0, 10), ...threads_kho_bai.slice(10, 15)].map((b, i) => ({ ma: b.ma, member_id: staff[1].id, luc: new Date(Date.now() - (i < 10 ? 864e5 : 0) - i * 6e5).toISOString(), link: i % 2 ? null : 'https://www.threads.com/@demo/post/DEMO' + i + 'xyz' }))
   return { threads_kho_bai, threads_kho_dang, work_schedules, affiliate_codes, affiliate_orders, affiliate_payouts, market_reports, seed_targets, members, routines, seed_groups: groups, daily_checks, seeding_posts, extra_tasks, day_notes, seed_ideas, team_reports, seeding_reviews, member_feedback }
 }
 

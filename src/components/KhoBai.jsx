@@ -7,13 +7,21 @@ import { useToast } from '../App.jsx'
 // Nội dung: bảng threads_kho_bai (bot nạp bằng scripts/bot.mjs threads-kho). Đã đăng: bảng threads_kho_dang.
 // Ảnh: bucket riêng tư threads-kho, xem qua link ký tạm 1 giờ.
 
-const KPI = 15
+const KPI = KPI_THREADS
 const LOW = 30
 const PAGE = 10
 const BUCKET = 'threads-kho'
 const LOAI = { meo: 'Mẹo', 'do-cau': 'Đố câu', 'tu-vung': 'Từ vựng', hoi: 'Hỏi', web: 'Giới thiệu web' }
 const vnDate = (ts) => !ts ? vnToday() : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(ts))
-const okLink = (s) => /^https?:\/\/\S+$/.test(s)
+// Link bài Threads bắt buộc (Thiện chốt 25/11): threads.com hoặc threads.net, dạng /@nick/post/MÃ.
+// Bỏ phần sau dấu ? và #, đưa về một dạng chuẩn để so trùng (cùng MÃ = cùng bài).
+export const KPI_THREADS = 15
+export function threadsLink(raw) {
+  const m = String(raw || '').trim().match(/^(?:https?:\/\/)?(?:www\.)?threads\.(?:com|net)\/@([A-Za-z0-9._]{1,40})\/post\/([A-Za-z0-9_-]{5,40})\/?(?:[?#].*)?$/)
+  return m ? `https://www.threads.com/@${m[1]}/post/${m[2]}` : null
+}
+const codeOf = (link) => (link || '').match(/\/post\/([A-Za-z0-9_-]+)$/)?.[1] || null
+const LINK_SAI = 'Link phải là bài Threads, dạng threads.com/@nick/post/...'
 
 export default function KhoBai({ me }) {
   const notify = useToast()
@@ -66,13 +74,19 @@ export default function KhoBai({ me }) {
     if (error || !data?.signedUrl) return notify('Không tải được ảnh', true)
     const a = document.createElement('a'); a.href = data.signedUrl; a.download = x.anh; document.body.appendChild(a); a.click(); a.remove()
   }
+  // Cùng 1 bài Threads không được ghi cho 2 bài trong kho
+  const dupOf = (link, ma) => dang.find((p) => p.ma !== ma && codeOf(p.link) && codeOf(p.link) === codeOf(link))
+  const dupMsg = (error) => /ma_bai_threads/i.test(error.message) ? 'Link này đã ghi cho bài khác trong kho' : /duplicate|unique/i.test(error.message) ? 'Bài này đã có người bấm đăng rồi' : /link_dang|check constraint/i.test(error.message) ? LINK_SAI : error.message
   const markDone = async (x) => {
-    const link = (links[x.ma] || '').trim()
-    if (link && !okLink(link)) return notify('Link phải bắt đầu bằng http:// hoặc https://', true)
+    const link = threadsLink(links[x.ma])
+    if (!link) return notify(LINK_SAI, true)
+    const d = dupOf(link, x.ma)
+    if (d) return notify(`Link này đã ghi cho bài ${d.ma}`, true)
     setBusy(x.ma)
-    const { error } = await sb.from('threads_kho_dang').insert({ ma: x.ma, member_id: me.id, link: link || null })
+    const { error } = await sb.from('threads_kho_dang').insert({ ma: x.ma, member_id: me.id, link })
     setBusy(null)
-    if (error) return notify(/duplicate|unique/i.test(error.message) ? 'Bài này đã có người bấm đăng rồi' : error.message, true)
+    if (error) return notify(dupMsg(error), true)
+    setLinks((l) => { const c = { ...l }; delete c[x.ma]; return c })
     if (date !== today) setDate(today)
     notify('Đã ghi đăng bài ' + x.ma); load()
   }
@@ -84,10 +98,13 @@ export default function KhoBai({ me }) {
     notify('Đã bỏ tích, bài về lại hàng chờ'); load()
   }
   const saveLink = async (p) => {
-    const link = (links[p.ma] ?? '').trim()
-    if (link && !okLink(link)) return notify('Link phải bắt đầu bằng http:// hoặc https://', true)
-    const { error } = await sb.from('threads_kho_dang').update({ link: link || null }).eq('ma', p.ma)
-    if (error) return notify(error.message, true)
+    const link = threadsLink(links[p.ma] ?? p.link)
+    if (!link) return notify(LINK_SAI, true)
+    const d = dupOf(link, p.ma)
+    if (d) return notify(`Link này đã ghi cho bài ${d.ma}`, true)
+    const { error } = await sb.from('threads_kho_dang').update({ link }).eq('ma', p.ma)
+    if (error) return notify(dupMsg(error), true)
+    setLinks((l) => { const c = { ...l }; delete c[p.ma]; return c })
     notify('Đã lưu link'); load()
   }
   const canEdit = (p) => p.member_id === me.id || me.role === 'admin'
@@ -101,8 +118,10 @@ export default function KhoBai({ me }) {
   if (bai === false) return <section className="card">{head}<p className="empty">Kho bài chưa có bảng dữ liệu. Chạy file supabase/015_threads_kho_bai.sql xong là dùng được.</p></section>
   if (bai === null) return <section className="card">{head}<p className="empty">Không tải được kho bài.</p></section>
 
-  const n = posted.length
-  const per = Object.entries(posted.reduce((o, p) => ({ ...o, [p.member_id]: (o[p.member_id] || 0) + 1 }), {}))
+  const counted = posted.filter((p) => threadsLink(p.link))
+  const n = counted.length
+  const noLink = posted.length - n
+  const per = Object.entries(counted.reduce((o, p) => ({ ...o, [p.member_id]: (o[p.member_id] || 0) + 1 }), {}))
 
   return (
     <>
@@ -117,6 +136,7 @@ export default function KhoBai({ me }) {
         </div>
         <div className="kho-kpi"><b>{n}</b>/{KPI} bài{n >= KPI && <span className="chip ok">Đủ chỉ tiêu</span>}</div>
         <div className={'bar' + (n >= KPI ? ' full' : '')}><span style={{ width: Math.min(100, Math.round((n / KPI) * 100)) + '%' }} /></div>
+        {noLink > 0 && <div className="mini"><span className="chip warn">{noLink} bài chưa có link</span> chưa được tính, dán link ở mục bài đã đăng bên dưới.</div>}
         {per.length > 0 && <div className="mini">{per.map(([id, k]) => `${names[id] || '?'}: ${k} bài`).join(' · ')}</div>}
         {queue.length < LOW && <p className="kho-low"><span className="chip warn">Sắp hết bài</span> Hàng chờ còn {queue.length} bài, dưới {LOW}. Cần nạp thêm bài vào kho.</p>}
       </section>
@@ -127,7 +147,7 @@ export default function KhoBai({ me }) {
           <p><b>Chỉ tiêu: 15 bài mỗi ngày</b>, đăng bằng nick Threads của Châu.</p>
           <ol>
             <li>Trước bài đầu tiên, thêm vào phần giới thiệu của hồ sơ: <b>Làm ở EPIX TOEIC</b>.</li>
-            <li>Mỗi bài: chép chữ, tải đúng ảnh đi kèm, đăng, rồi bấm "Đã đăng" ở đây (dán link bài nếu được).</li>
+            <li>Mỗi bài: chép chữ, tải đúng ảnh đi kèm rồi đăng. Đăng xong, dán link bài Threads vào ô bên dưới bài rồi bấm "Đã đăng". Phải có link thì bài mới được tính vào chỉ tiêu.</li>
             <li>Đăng rải từ sáng tới tối, mỗi bài cách nhau khoảng 45-60 phút. Đừng đăng dồn.</li>
             <li>Bài đố câu: 2-3 tiếng sau mới đăng bình luận đáp án.</li>
             <li>Ai comment thì trả lời bằng lời của Châu. Hỏi về EPIX mà không chắc thì hỏi Thiện, đừng đoán.</li>
@@ -159,8 +179,8 @@ export default function KhoBai({ me }) {
                   {x.binh_luan_dau && <button className="btn ghost sm" onClick={() => copy(x.binh_luan_dau, 'đáp án')}>Chép đáp án</button>}
                 </div>
                 <div className="kho-done">
-                  <input className="input" placeholder="Dán link bài đã đăng (không bắt buộc)" value={links[x.ma] || ''} onChange={(e) => setLinks((l) => ({ ...l, [x.ma]: e.target.value }))} />
-                  <button className="btn sm" disabled={busy === x.ma} onClick={() => markDone(x)}>Đã đăng</button>
+                  <input className="input" placeholder="Dán link bài Threads vừa đăng (bắt buộc)" value={links[x.ma] || ''} onChange={(e) => setLinks((l) => ({ ...l, [x.ma]: e.target.value }))} />
+                  <button className="btn sm" disabled={busy === x.ma || !threadsLink(links[x.ma])} title={threadsLink(links[x.ma]) ? '' : 'Dán link bài Threads trước'} onClick={() => markDone(x)}>Đã đăng</button>
                 </div>
               </div>
             </div>
@@ -180,7 +200,7 @@ export default function KhoBai({ me }) {
                 {x.anh && urls[x.anh] && <img className="kho-img sm" src={urls[x.anh]} alt={'Ảnh bài ' + x.ma} loading="lazy" />}
                 <div className="kho-body">
                   <div className="th-top">
-                    <b>{timeVN(p.luc)}</b><span className="chip ok">Đã đăng</span><b>{x.ma}</b>
+                    <b>{timeVN(p.luc)}</b>{threadsLink(p.link) ? <span className="chip ok">Đã đăng</span> : <span className="chip warn">Chưa có link, chưa tính</span>}<b>{x.ma}</b>
                     <span className="mini">{names[p.member_id] || '?'}</span>
                     {p.link && <a style={{ marginLeft: 'auto' }} href={p.link} target="_blank" rel="noreferrer">Mở bài ↗</a>}
                   </div>

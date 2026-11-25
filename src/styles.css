@@ -896,3 +896,5 @@ button.aff-row:hover, .aff-row.on { background: var(--tint); }
 .kho-hd summary { cursor: pointer; font-size: 15px; }
 .kho-hd p, .kho-hd ol { margin: 10px 0 0; font-size: 14px; line-height: 1.55; }
 .kho-hd ol { padding-left: 22px; }
+.pnums .pnum.th { grid-column: 1 / -1; }
+.pnums .pnum.th.full .v { color: var(--ok-ink); }

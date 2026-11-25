@@ -8,6 +8,7 @@ import { initials, greet, shortName } from '../components/ui.jsx'
 import Affiliate from '../components/Affiliate.jsx'
 import { TeamSchedule } from '../components/Schedule.jsx'
 import Progress from '../components/Progress.jsx'
+import { threadsLink, KPI_THREADS } from '../components/KhoBai.jsx'
 
 // Số liệu 1 người trong 1 ngày. Màu: xanh = đủ việc + bài + comment; đỏ = không làm gì; vàng = có làm nhưng thiếu
 function dayStat(m, date, data, routines, today) {
@@ -48,6 +49,7 @@ export default function Board({ me, onOpen }) {
   const [extra, setExtra] = useState(null)
   const [sel, setSel] = useState(null)
   const [all, setAll] = useState([])
+  const [th, setTh] = useState({}) // bài Threads EPIX có link hợp lệ hôm nay, theo người
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +64,10 @@ export default function Board({ me, onOpen }) {
       setMembers(ms.filter((m) => m.active && m.role === 'staff')); setRoutines(rs)
       setData({ ...d, reviewOf: Object.fromEntries(reviews.map((r) => [r.post_id, r])) })
       setExtra({ targets, freeIdeas, skipped, reports: reports.filter((r) => !r.member_id), market })
+      // KPI Threads EPIX (Thiện chốt 25/11): chỉ đếm bài có link hợp lệ; chưa tính vào % ngày
+      const { data: kd } = await api.sb.from('threads_kho_dang').select('member_id,luc,link').gte('luc', addDays(today, -1) + 'T17:00:00Z')
+      const vn = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(ts))
+      setTh((kd || []).filter((x) => x.luc && vn(x.luc) === today && threadsLink(x.link)).reduce((o, x) => ({ ...o, [x.member_id]: (o[x.member_id] || 0) + 1 }), {}))
     } catch (x) { notify(x.message, true) }
   }, [start, end, today, yday, notify])
 
@@ -145,6 +151,7 @@ export default function Board({ me, onOpen }) {
                 <div className="pnum"><div className="lbl">Bài seeding</div><div className="v">{s.a}<small> / {s.b}</small></div></div>
                 <div className="pnum"><div className="lbl">Còn phải trả lời</div><div className="v">{leftOf(m)}<small> · đã trả lời {s.c}</small></div></div>
                 <div className="pnum"><div className="lbl">Điểm bot 7 ngày</div><div className="v">{a ? '★ ' + a.toFixed(1).replace('.', ',') : '—'}</div></div>
+                {(/châu/i.test(m.name) || th[m.id] > 0) && <div className={'pnum th' + ((th[m.id] || 0) >= KPI_THREADS ? ' full' : '')}><div className="lbl">Bài Threads</div><div className="v">{th[m.id] || 0}<small> / {KPI_THREADS}</small></div></div>}
               </div>
               <div className="pfoot">
                 <span>7 ngày</span>

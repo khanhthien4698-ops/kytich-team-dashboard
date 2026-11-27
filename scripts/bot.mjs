@@ -31,6 +31,7 @@
 //   node scripts/bot.mjs threads-day [--date YYYY-MM-DD] [--dir PATH]  # đẩy báo cáo đăng Threads (file bao-cao/<ngày>.json) lên mục Threads; mặc định hôm nay + hôm qua, file không đổi thì bỏ qua; xoá bình luận người xem ở các ngày cũ hơn 7 ngày
 //   node scripts/bot.mjs threads-kho [--file PATH] [--dry]  # nạp kho bài Threads EPIX (kho-bai.json + thư mục ảnh cạnh nó) lên tab Threads; upsert theo "ma", chạy lại an toàn, không đụng trạng thái "đã đăng"; ảnh đã có cùng dung lượng thì bỏ qua
 //   node scripts/bot.mjs epix-kpi --json '[{"d":"2026-11-26","truy_cap":187,"user_moi":5}]'  # ghi số web EPIX theo ngày (khối KPI EPIX ở Cả đội); upsert theo ngày, chạy lại an toàn
+//   node scripts/bot.mjs muse-loi [--all] | --giao ID[,ID] | --xong ID | --bo ID [--note "..."]  # hàng chờ báo lỗi web Muse ghi (bảng muse_bao_loi): mặc định in JSON các lỗi 'moi'; --giao khi đã giao phiên 01
 //   Bàn việc chỉ Thiện và bot đọc/ghi được (RLS). Dữ liệu có số tài chính: không in ra log chung, không đưa lên git.
 //   scan = quét group giữa ngày, mỗi khung 1 lần: 8h (08–10:59), 11h, 14h, 20h (20–23:59); 17h là lượt evening.
 //   Mọi lượt dùng chung Facebook nên không chạy chồng nhau. scan in "GO since=<ISO>" = lần đọc group gần nhất.
@@ -146,7 +147,7 @@ async function main() {
     const by = {}; kho.forEach((k) => { by[k.topic] = (by[k.topic] || 0) + 1 })
     return console.log(`OK: kho có ${kho.length} câu hỏi + trả lời (${Object.entries(by).map(([t, n]) => t + ' ' + n).join(', ')}) → ${KHO_FILE}`)
   }
-  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 38).join('\n')); return }
+  if (!cmd || cmd === 'help') { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 39).join('\n')); return }
 
   if (!URL || !KEY) die('Thiếu VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY trong .env.local')
   const sb = createClient(URL, KEY, { auth: { persistSession: false } })
@@ -255,6 +256,21 @@ async function main() {
     await q(sb.from('epix_kpi_ngay').upsert(list, { onConflict: 'd' }))
     const all = await q(sb.from('epix_kpi_ngay').select('d,truy_cap,user_moi').order('d'))
     console.log(`OK: ghi ${list.length} ngày. Bảng có ${all.length} ngày, mới nhất ${all.at(-1)?.d}.`)
+    return
+  }
+
+  if (cmd === 'muse-loi') {
+    // Hàng chờ báo lỗi web do Muse ghi (SQL 019). Con tổng/lịch đọc rồi giao phiên 01, xong thì đánh dấu.
+    const ids = (v) => String(v).split(',').map((x) => (/^\d+$/.test(x.trim()) ? Number(x) : die('ID không hợp lệ: ' + x)))
+    const set = a.giao ? ['da_giao', a.giao] : a.xong ? ['xong', a.xong] : a.bo ? ['bo', a.bo] : null
+    if (set) {
+      const patch = { trang_thai: set[0], xu_ly_luc: new Date().toISOString(), ...(a.note ? { ghi_chu: String(a.note).slice(0, 500) } : {}) }
+      const done = await q(sb.from('muse_bao_loi').update(patch).in('id', ids(set[1])).select('id'))
+      return console.log(`OK: ${done.length} báo lỗi chuyển sang "${set[0]}".`)
+    }
+    let qq = sb.from('muse_bao_loi').select('id,at,mo_ta,de,ky_nang,part,cau,nguon,trang_thai,ghi_chu').order('at')
+    if (!a.all) qq = qq.eq('trang_thai', 'moi')
+    console.log(JSON.stringify(await q(qq.limit(200)), null, 1))
     return
   }
 

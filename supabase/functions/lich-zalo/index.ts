@@ -6,12 +6,13 @@
 // CHẾ ĐỘ SONG SONG: chưa có secret ZALO_TEAM_ID / ZALO_CODONG_ID thì gửi riêng Thiện (ZALO_CHAT_ID) kèm chữ [Bản máy chủ],
 // để so với bản cũ trên máy. Chạy đúng 2-3 ngày rồi Thiện mới thêm 2 secret đó (và tắt bản cũ).
 // 28/11: Thiện bảo seeding gửi thẳng nhóm Team (đã có ZALO_TEAM_ID). Cổ đông vẫn song song tới khi có ZALO_CODONG_ID.
+// 28/11 chiều: cổ đông cũng gửi thẳng nhóm Cổ đông (ZALO_CODONG_ID), thêm tin tổng kết tháng ngày 1. Chỉ số Kỳ Tích, không EPIX.
 // Zalo lỗi: thử lại 3 lần trong lượt, lượt bù 20 phút sau thử tiếp; vẫn lỗi thì nhắn riêng Thiện.
 // Secret: ZALO_BOT_TOKEN, ZALO_CHAT_ID, KT_CONG_KEY (dùng chung với muse-cong); ZALO_TEAM_ID, ZALO_CODONG_ID (thêm sau).
 // Deploy: Supabase → Edge Functions → Deploy new function → tên "lich-zalo" → dán file này → TẮT "Verify JWT".
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const V = 'lich-zalo 2026-11-28a'
+const V = 'lich-zalo 2026-11-28b'
 const URL = Deno.env.get('SUPABASE_URL')!
 const sb = createClient(URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 const KT_URL = 'https://bacoamhbatqpxatrrflz.supabase.co'
@@ -189,11 +190,42 @@ function soanCoDong(j: Record<string, any>, D: string) {
   return { text, batThuong, R }
 }
 
-async function guiCoDong(thu = false) {
+// Báo riêng Thiện khi báo cáo cổ đông lỗi: chỉ báo ở lượt cuối 8h50 (các lượt trước còn tự thử lại 10 phút sau)
+async function baoLoiCoDong(min: number, loi: string) {
+  if (min < 530) return
+  await zaloThuLai(Deno.env.get('ZALO_CHAT_ID') ?? '', `⚠️ [Máy chủ] Báo cáo cổ đông hôm nay chưa gửi được vào nhóm: ${loi.slice(0, 150)}. Đã thử tới 8h50.`).catch(() => {})
+}
+// Tin tổng kết tháng (ngày 1), tháng = tháng của R (hôm qua). Chỉ số Kỳ Tích.
+function soanThang(j: Record<string, any>, R: string) {
+  const M = R.slice(0, 7), mm = M.slice(5, 7)
+  const daily: { d: string; n: number; dt: number }[] = (j.daily ?? []).filter((x: { d: string }) => x.d.startsWith(M))
+  const dt = daily.reduce((t, x) => t + (x.dt || 0), 0), don = daily.reduce((t, x) => t + (x.n || 0), 0)
+  const PM = addDays(M + '-01', -1).slice(0, 7)
+  const truoc = (j.daily ?? []).filter((x: { d: string }) => x.d.startsWith(PM))
+  const dtTruoc = truoc.length >= 28 ? truoc.reduce((t: number, x: { dt: number }) => t + (x.dt || 0), 0) : 0
+  const kpi = Number(j.settings?.['kpi_' + M.replace('-', '')] ?? 0)
+  const items: { d: string; g: string; amt: number }[] = (j.exp_items ?? []).filter((x: { d: string }) => x.d?.startsWith(M))
+  const nhom = (g: string) => items.filter((x) => x.g === g).reduce((t, x) => t + (x.amt || 0), 0)
+  const cp = items.reduce((t, x) => t + (x.amt || 0), 0), lai = dt - cp
+  const tot: Num = j.totals ?? {}
+  const quy = (tot.fund_initial || 0) + (tot.rev || 0) - (tot.exp_paid || 0) - (tot.invest || 0) - (tot.receivable || 0)
+  return [
+    `Tổng kết tháng ${mm} Aptis Kỳ Tích`, '',
+    `- Doanh thu cả tháng: ${tr(dt)} · ${don} đơn${dtTruoc ? ` (${dt >= dtTruoc ? '↑' : '↓'}${Math.abs(Math.round((dt - dtTruoc) / dtTruoc * 100))}% so với tháng ${PM.slice(5, 7)})` : ''}`,
+    `- KPI: ${tr(kpi)}, đạt ${kpi ? Math.round(dt / kpi * 100) : 0}%`,
+    `- Chi phí: ${tr(cp)} (Nhân sự ${tr(nhom('Nhân sự / CTV'))} · Hạ tầng & Tool ${tr(nhom('Hạ tầng & Tool'))} · Marketing ${tr(nhom('Marketing & Vận hành'))})`,
+    `- Lãi tháng: ${lai >= 0 ? '+' : '-'}${tr(Math.abs(lai))}`,
+    `- Quỹ cuối tháng: ${tr(quy)}`,
+  ].join('\n')
+}
+
+async function guiCoDong(thu = false, b_thang = false) {
   const { day: D, min } = vnParts()
   if (thu) {
-    const { text, batThuong } = soanCoDong(await soLieuCoDong(), D)
+    const j = await soLieuCoDong()
+    const { text, batThuong, R } = soanCoDong(j, D)
     const r = await zalo(Deno.env.get('ZALO_CHAT_ID') ?? '', '[Thử bản máy chủ] ' + text + (batThuong ? `\n(Bản thật sẽ GIỮ LẠI vì: ${batThuong})` : ''))
+    if (r.ok && b_thang) await zalo(Deno.env.get('ZALO_CHAT_ID') ?? '', '[Thử bản máy chủ] ' + soanThang(j, R))
     return r.ok ? { da_gui_thu: true, bat_thuong: batThuong || null } : { loi: r.loi }
   }
   if (min < 480 || min >= 540) return { bo_qua: 'ngoài khung 8h-8h59' }
@@ -208,12 +240,20 @@ async function guiCoDong(thu = false) {
       return { giu_lai: batThuong }
     }
     const to = nguoiNhan('ZALO_CODONG_ID')
-    const r = await zalo(to.chat, to.tien_to + text)
+    const r = await zaloThuLai(to.chat, to.tien_to + text)
     await ghi('co_dong', D, r.ok ? 'da_gui' : 'loi', r.ok ? (to.tien_to ? 'gửi riêng Thiện (song song)' : 'gửi nhóm Cổ đông') : r.loi)
-    return r.ok ? { da_gui: D, song_song: !!to.tien_to } : { loi: r.loi }
+    if (!r.ok) { await baoLoiCoDong(min, r.loi ?? ''); return { loi: r.loi } }
+    // Ngày 1: thêm tin tổng kết tháng trước (1 lần, khoá riêng)
+    if (D.endsWith('-01') && (await giuCho('co_dong', D + '-thang'))) {
+      const r2 = await zaloThuLai(to.chat, to.tien_to + soanThang(j, R))
+      await ghi('co_dong', D + '-thang', r2.ok ? 'da_gui' : 'loi', r2.ok ? 'tổng kết tháng' : r2.loi)
+      if (!r2.ok) await baoLoiCoDong(min, 'tin tổng kết tháng: ' + (r2.loi ?? ''))
+    }
+    return { da_gui: D, song_song: !!to.tien_to }
   } catch (e) {
     const loi = e instanceof Error ? e.message : String(e)
     await ghi('co_dong', D, 'loi', loi)
+    await baoLoiCoDong(min, loi)
     return { loi }
   }
 }
@@ -227,7 +267,7 @@ Deno.serve(async (req) => {
   if (thu && (!Deno.env.get('KT_CONG_KEY') || req.headers.get('x-thu-key') !== Deno.env.get('KT_CONG_KEY'))) return out({ loi: 'Sai mã thử' }, 403)
   try {
     if (b.loai === 'seeding') return out(await guiSeeding(thu))
-    if (b.loai === 'co_dong') return out(await guiCoDong(thu))
+    if (b.loai === 'co_dong') return out(await guiCoDong(thu, b.thang === true))
   } catch (e) { return out({ loi: e instanceof Error ? e.message : String(e) }, 500) }
   return out({ loi: 'loai phải là seeding hoặc co_dong' }, 400)
 })

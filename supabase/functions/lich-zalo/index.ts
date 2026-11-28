@@ -1,15 +1,17 @@
 // lich-zalo: máy chủ tự gửi tin Zalo theo giờ, không cần máy Thiện, không AI (Thiện duyệt 27/11/2026, SQL 020).
-// pg_cron gọi POST {"loai": "seeding"} lúc 11h30, 17h, 22h và {"loai": "co_dong"} 8h-8h50 (mỗi 10 phút, gửi 1 lần/ngày).
+// pg_cron gọi POST {"loai": "seeding"} lúc 9h, 11h30, 17h, 22h (lượt bù sau 20 phút; 9h thêm 28/11, SQL 021) và {"loai": "co_dong"} 8h-8h50 (mỗi 10 phút, gửi 1 lần/ngày).
 //   seeding: tiến độ seeding hôm nay, nội dung y lệnh `bot.mjs tien-do` (22h thêm dòng chốt ngày) → nhóm Team.
 //   co_dong: báo cáo ngày hôm qua, y mẫu lịch bao-cao-co-dong-ngay-9h → nhóm Cổ đông. Số bất thường → chỉ nhắn riêng Thiện.
 // Không cần mã để gọi: mỗi khung giờ chỉ gửi đúng 1 lần (bảng lich_zalo_gui), gọi ngoài giờ thì bỏ qua.
 // CHẾ ĐỘ SONG SONG: chưa có secret ZALO_TEAM_ID / ZALO_CODONG_ID thì gửi riêng Thiện (ZALO_CHAT_ID) kèm chữ [Bản máy chủ],
 // để so với bản cũ trên máy. Chạy đúng 2-3 ngày rồi Thiện mới thêm 2 secret đó (và tắt bản cũ).
+// 28/11: Thiện bảo seeding gửi thẳng nhóm Team (đã có ZALO_TEAM_ID). Cổ đông vẫn song song tới khi có ZALO_CODONG_ID.
+// Zalo lỗi: thử lại 3 lần trong lượt, lượt bù 20 phút sau thử tiếp; vẫn lỗi thì nhắn riêng Thiện.
 // Secret: ZALO_BOT_TOKEN, ZALO_CHAT_ID, KT_CONG_KEY (dùng chung với muse-cong); ZALO_TEAM_ID, ZALO_CODONG_ID (thêm sau).
 // Deploy: Supabase → Edge Functions → Deploy new function → tên "lich-zalo" → dán file này → TẮT "Verify JWT".
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const V = 'lich-zalo 2026-11-27a'
+const V = 'lich-zalo 2026-11-28a'
 const URL = Deno.env.get('SUPABASE_URL')!
 const sb = createClient(URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 const KT_URL = 'https://bacoamhbatqpxatrrflz.supabase.co'
@@ -33,6 +35,16 @@ async function zalo(chat: string, text: string) {
   })
   const j = await r.json().catch(() => ({}))
   return j?.ok ? { ok: true } : { ok: false, loi: `Zalo ${j?.error_code ?? r.status}` }
+}
+// Gửi có thử lại: 3 lần, cách 5 rồi 15 giây (rớt mạng, Zalo chập chờn)
+async function zaloThuLai(chat: string, text: string) {
+  let r: { ok: boolean; loi?: string } = { ok: false, loi: 'chưa gửi' }
+  for (const cho of [0, 5000, 15000]) {
+    if (cho) await new Promise((x) => setTimeout(x, cho))
+    try { r = await zalo(chat, text) } catch (e) { r = { ok: false, loi: e instanceof Error ? e.message : String(e) } }
+    if (r.ok) return r
+  }
+  return r
 }
 // Người nhận: nhóm thật nếu đã cài secret, chưa thì riêng Thiện (chế độ song song)
 function nguoiNhan(secret: string) {
@@ -84,6 +96,13 @@ async function tienDo(today: string, hour: number, chot: boolean) {
   return lines.slice(0, 8).join('\n')
 }
 
+// Báo riêng Thiện khi lượt seeding lỗi (lượt chính: còn lượt bù; lượt bù: hết thử)
+async function baoLoiSeeding(slot: number, min: number, loi: string) {
+  const gio = `${Math.floor(slot / 60)}h${slot % 60 ? slot % 60 : ''}`
+  const conBu = min < slot + 15
+  await zaloThuLai(Deno.env.get('ZALO_CHAT_ID') ?? '', `⚠️ [Máy chủ] Báo seeding nhóm Team lượt ${gio} lỗi: ${loi.slice(0, 150)}. ${conBu ? 'Sẽ tự thử lại sau 20 phút.' : 'Đã thử lại vẫn hỏng, nhóm chưa nhận tin lượt này.'}`).catch(() => {})
+}
+
 async function guiSeeding(thu = false) {
   const { day, min } = vnParts()
   if (thu) {
@@ -91,8 +110,8 @@ async function guiSeeding(thu = false) {
     const r = await zalo(Deno.env.get('ZALO_CHAT_ID') ?? '', '[Thử bản máy chủ] ' + msg)
     return r.ok ? { da_gui_thu: true } : { loi: r.loi }
   }
-  // Khung 11h30, 17h, 22h; trễ tối đa 60 phút (như seeding-bao-nhom --lich)
-  const slot = [690, 1020, 1320].find((s) => min >= s && min < s + 60)
+  // Khung 9h, 11h30, 17h, 22h; trễ tối đa 60 phút (như seeding-bao-nhom --lich)
+  const slot = [540, 690, 1020, 1320].find((s) => min >= s && min < s + 60)
   if (slot == null) return { bo_qua: 'ngoài khung giờ' }
   const key = `${day}-${slot}`
   if (!(await giuCho('seeding', key))) return { bo_qua: 'khung này đã gửi' }
@@ -100,12 +119,14 @@ async function guiSeeding(thu = false) {
     const msg = await tienDo(day, Math.floor(slot / 60), slot === 1320)
     if (!msg.includes('Seeding')) throw new Error('không lấy được tiến độ')
     const to = nguoiNhan('ZALO_TEAM_ID')
-    const r = await zalo(to.chat, to.tien_to + msg)
+    const r = await zaloThuLai(to.chat, to.tien_to + msg)
     await ghi('seeding', key, r.ok ? 'da_gui' : 'loi', r.ok ? (to.tien_to ? 'gửi riêng Thiện (song song)' : 'gửi nhóm Team') : r.loi)
+    if (!r.ok) await baoLoiSeeding(slot, min, r.loi ?? '')
     return r.ok ? { da_gui: key, song_song: !!to.tien_to } : { loi: r.loi }
   } catch (e) {
     const loi = e instanceof Error ? e.message : String(e)
     await ghi('seeding', key, 'loi', loi)
+    await baoLoiSeeding(slot, min, loi)
     return { loi }
   }
 }
